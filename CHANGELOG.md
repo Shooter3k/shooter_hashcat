@@ -1,5 +1,24 @@
 # shooter_hashcat release notes
 
+## v7.1.2-shooter.20260824.58
+
+Clean Windows rebuild and synchronized recovery release.
+
+### Improved
+
+- Publish this maintenance release through the clean Windows release workflow
+  so every frontend, core, module, bridge, and feed is rebuilt together. Local
+  incremental builds remain useful for development but are not deployment or
+  release artifacts.
+
+### Verified
+
+- Rebuild the complete Windows x64 distribution from a clean object tree and
+  verify its internal SHA-256 manifest, SBOM, executable version, module count,
+  bridge set, and feed set before publication.
+- Run representative known-answer attacks against the clean executable to
+  confirm candidate generation and recovered plaintext remain correct.
+
 ## v7.1.2-shooter.20260824.57
 
 Interactive forward seeking, cross-build autotune reuse, and redirected-output

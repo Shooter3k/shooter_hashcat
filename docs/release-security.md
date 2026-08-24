@@ -11,6 +11,12 @@ The complete Windows archive has three verification layers:
    provenance and the SBOM. They bind the published archive digest to the tag,
    repository, workflow, and ephemeral GitHub identity that produced it.
 
+Tagged releases always invoke `package-windows.ps1 -BuildAction Rebuild` on a
+clean GitHub runner. `build-windows.ps1 -Action Build` is an incremental
+developer convenience and must not be copied into a production installation or
+resident-worker pool after headers, compiler flags, or shared structures have
+changed. Use `-Action Rebuild` for every manually deployed production binary.
+
 Verify the downloaded archive with GitHub CLI:
 
 ```powershell
