@@ -1,6 +1,6 @@
 # shooter_hashcat release notes
 
-## v7.1.2-shooter.20260824.56
+## v7.1.2-shooter.20260824.57
 
 Interactive forward seeking, cross-build autotune reuse, and redirected-output
 formatting.
