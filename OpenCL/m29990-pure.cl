@@ -101,7 +101,7 @@ DECLSPEC void cmiyc_hmac_seed (GLOBAL_AS const pw_t *pw, GLOBAL_AS const salt_t 
   sha512_hmac_update_global_swap (&ctx, pw->i, pw->pw_len);
 
   // config = LE32(rounds) || LE32(memlog) = 8 bytes
-  const u32 config[2] = { salt->scrypt_p, salt->scrypt_r };
+  const u32 config[32] = { salt->scrypt_p, salt->scrypt_r };
   sha512_hmac_update_swap (&ctx, config, 8);
   sha512_hmac_final (&ctx);
 
@@ -124,7 +124,7 @@ DECLSPEC void cmiyc_hmac_seed (GLOBAL_AS const pw_t *pw, GLOBAL_AS const salt_t 
  */
 DECLSPEC void cmiyc_fill_hash (PRIVATE_AS const u32 *chain, const u64 index, PRIVATE_AS u32 *output)
 {
-  u32 w[24] = { 0 };
+  u32 w[32] = { 0 };
 
   // bytes 0-63: chain (16 LE u32s)
   for (u32 i = 0; i < 16; i++) w[i] = chain[i];
@@ -153,7 +153,7 @@ DECLSPEC void cmiyc_fill_hash (PRIVATE_AS const u32 *chain, const u64 index, PRI
  */
 DECLSPEC void cmiyc_mix_hash (GLOBAL_AS const u32 *current, GLOBAL_AS const u32 *other, const u64 round, const u64 index, const u32 tag, PRIVATE_AS u32 *output)
 {
-  u32 w[40] = { 0 };
+  u32 w[64] = { 0 };
 
   // bytes 0-63: current (16 LE u32s)
   for (u32 i = 0; i < 16; i++) w[i] = current[i];
@@ -273,11 +273,27 @@ KERNEL_FQ KERNEL_FA void m29990_comp (KERN_ATTR_TMPS (cmiyc_tmp_t))
 
   if (gid >= GID_CNT) return;
 
-  // DEBUG: hardcode expected values to test comparison pipeline
-  const u32 r0 = 0xCE7C47C9;
-  const u32 r1 = 0x83F58150;
-  const u32 r2 = 0xD7A63D9E;
-  const u32 r3 = 0x55443F9E;
+  GLOBAL_AS const u32 *memory = cmiyc_memory ((GLOBAL_AS u32 *) d_extra0_buf, (GLOBAL_AS u32 *) d_extra1_buf, (GLOBAL_AS u32 *) d_extra2_buf, (GLOBAL_AS u32 *) d_extra3_buf, gid);
+
+  const u64 blocks = (u64) salt_bufs[SALT_POS_HOST].scrypt_N * 2;
+
+  u32 accumulator[32] = { 0 };
+
+  for (u64 block = 0; block < blocks; block++)
+  {
+    GLOBAL_AS const u32 *src = memory + block * 16;
+
+    for (u32 i = 0; i < 16; i++) accumulator[i] ^= src[i];
+  }
+
+  u32 digest[16];
+
+  cmiyc_sha512_w (accumulator, 64, digest);
+
+  const u32 r0 = digest[0];
+  const u32 r1 = digest[1];
+  const u32 r2 = digest[2];
+  const u32 r3 = digest[3];
 
   #define il_pos 0
 

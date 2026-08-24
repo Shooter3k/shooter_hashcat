@@ -3513,6 +3513,7 @@ typedef struct status_ctx
   u64  words_off;               // used by dispatcher; get_work () as offset; attention: needs to be redone on in restore case!
   u64  words_cur;               // used by dispatcher; the different to words_cur_next is that this counter guarantees that the work from zero to this counter has been actually computed
                                 // has been finished actually, can be used for restore point therefore
+  u64  words_seek_guard;        // a live forward seek keeps slow-candidate restore conservative until every device crosses this position
   u64  words_base;              // the unamplified max keyspace
   u64  words_cnt;               // the amplified max keyspace
 
@@ -3641,6 +3642,7 @@ typedef struct event_ctx
   bool   msg_newline;
 
   size_t prev_len;
+  bool   prev_on_stderr;
 
   const char *error_report_version;
   int         error_report_argc;

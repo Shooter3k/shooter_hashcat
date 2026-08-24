@@ -227,6 +227,7 @@ static int inner2_loop (hashcat_ctx_t *hashcat_ctx)
 
   status_ctx->words_off = 0;
   status_ctx->words_cur = 0;
+  status_ctx->words_seek_guard = 0;
 
   // Where the round starts is only settled below, once its own keyspace is known, because --skip is a
   // position in the whole queue of rounds and not in this one. A restored session is the exception:

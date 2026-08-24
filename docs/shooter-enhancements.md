@@ -684,3 +684,22 @@ remains byte-for-byte UTF-8. Candidate-data streams such as `--stdout` also
 remain raw, because converting those bytes would change the attack data. A
 terminal font still needs a glyph for the requested character; a missing-glyph
 box is a font limitation rather than an encoding conversion error.
+
+## Interactive candidate-position control
+
+### 57. Live forward seek
+
+Pressing `g` during a running or paused attack prompts for a new forward
+position. Whole numbers from 0 through 100 select that percentage of the
+current unamplified base keyspace; numbers above 100 select an exact one-based
+line/base position. The distinction is value based, so `100` is always 100
+percent and `101` is always position 101.
+
+The dispatcher moves only past work that has not yet been assigned. Existing
+GPU batches finish, new batches start at the selected point, and the skipped
+base positions plus their complete amplification are booked as rejected
+progress. The restore boundary remains conservative until prior assignments
+finish, preventing lost work after interruption. Backward requests and
+nonseekable stdin or ordered `--stdout` sessions are refused without changing
+the attack. See [Live forward seek](live-goto.md) for position semantics,
+examples, limitations, and mode-13 behavior.

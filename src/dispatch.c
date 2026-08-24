@@ -1902,7 +1902,34 @@ static int pipe_run (hashcat_ctx_t *hashcat_ctx, hc_device_param_t *device_param
     {
       device_param->words_done = MAX (device_param->words_done, words_fin);
 
-      status_ctx->words_cur = (slow == true) ? get_highest_words_done (hashcat_ctx) : get_lowest_words_done (hashcat_ctx);
+      if (slow == true)
+      {
+        // Slow-candidate restore normally follows the furthest device. A live
+        // seek creates an intentional hole, so keep the old safe point until
+        // every device has crossed the new dispatch position. If a short tail
+        // never reaches that barrier, restore stays conservative and may
+        // repeat work, but it cannot omit an unfinished pre-seek batch.
+        hc_thread_mutex_lock (status_ctx->mux_dispatcher);
+
+        if (status_ctx->words_seek_guard > 0)
+        {
+          if (get_lowest_words_done (hashcat_ctx) >= status_ctx->words_seek_guard)
+          {
+            status_ctx->words_seek_guard = 0;
+            status_ctx->words_cur = get_highest_words_done (hashcat_ctx);
+          }
+        }
+        else
+        {
+          status_ctx->words_cur = get_highest_words_done (hashcat_ctx);
+        }
+
+        hc_thread_mutex_unlock (status_ctx->mux_dispatcher);
+      }
+      else
+      {
+        status_ctx->words_cur = get_lowest_words_done (hashcat_ctx);
+      }
     }
 
     if (checkpoint_wait_worker (hashcat_ctx) == false) break;

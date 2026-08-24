@@ -1,5 +1,35 @@
 # shooter_hashcat release notes
 
+## v7.1.2-shooter.20260824.56
+
+Interactive forward seeking, cross-build autotune reuse, and redirected-output
+formatting.
+
+### Added
+
+- Add interactive `[g]oto` forward seeking during running or paused attacks.
+  Values from 0 through 100 select a percentage of the current base keyspace;
+  values above 100 select an exact one-based line/base position. Already
+  assigned GPU work finishes safely, skipped amplification is included in
+  progress, and backward, stdin, `--stdout`, and out-of-range seeks are
+  rejected without changing the attack.
+
+### Improved
+
+- Search all otherwise compatible RTX 4090 autotune values after a Hashcat
+  rebuild, preferring a covering and then nearest salt/digest workload. Reused
+  geometry is measured on the current kernel and real workload before use,
+  promoted under the current build/workload key when accepted, and discarded
+  in favor of normal autotune when validation fails.
+
+### Fixed
+
+- Preserve in-place progress replacement on interactive terminals while
+  terminating each pending progress record when output is redirected. Startup,
+  hash parsing, sorting, and similar messages no longer run together in logs
+  or controller transcripts, including when logging switches between stdout
+  and stderr.
+
 ## v7.1.2-shooter.20260820.55
 
 Candidate generation, final-candidate policy, Unicode status output, and

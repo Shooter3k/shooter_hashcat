@@ -75,6 +75,8 @@ item links to a plain-language explanation.
 53. **[All-rejected optimized input retries with the pure kernel](docs/shooter-enhancements.md#53-automatic-pure-kernel-recovery)** — when `-O` parser limits reject every supplied hash, the complete session is rebuilt once without `-O`.
 54. **[PCFG candidates run through a native deterministic feed](docs/shooter-enhancements.md#54-native-pcfg-feed)** — train a probability-ordered grammar, then run it as `-a 8 pcfg MODEL` with keyspace, rules, restore, and multi-GPU distribution.
 55. **[Final candidates can require character classes](docs/shooter-enhancements.md#55-final-candidate-class-requirements)** — independent, default-off upper/lower/digit/symbol minimums are checked after supported rules and complete mode-13 pipelines.
+56. **[Multibyte candidates display correctly on Windows](docs/shooter-enhancements.md#56-code-page-independent-utf-8-candidate-display)** — valid UTF-8 previews use the Unicode console without changing candidate bytes or redirected output.
+57. **[A running attack can seek forward](docs/shooter-enhancements.md#57-live-forward-seek)** — press `g`; values through 100 mean percentage and larger values mean an exact one-based line/base position.
 
 ## Download and run
 
@@ -126,6 +128,7 @@ Windows and Linux builds, Rust crates, and the sanitizer-backed parser fuzzer.
 | Final-candidate class requirements | [docs/candidate-requirements.md](docs/candidate-requirements.md) |
 | Candidate methods 1-6 and implementation status | [docs/candidate-generation-roadmap.md](docs/candidate-generation-roadmap.md) |
 | Runtime and checkpoint controls | [docs/runtime-controls.md](docs/runtime-controls.md) and [docs/checkpoint-control.md](docs/checkpoint-control.md) |
+| Live forward seek by percentage or line | [docs/live-goto.md](docs/live-goto.md) |
 | Interactive status output | [consistent remaining and recovery-rate lines](docs/shooter-enhancements.md#49-consistent-remaining-and-recovery-rate-status) |
 | Resumable candidate output | [docs/stdout-sessions.md](docs/stdout-sessions.md) |
 | mdxfind modes | [docs/mdxfind-modules.md](docs/mdxfind-modules.md) and the [complete JSON registry](docs/mdxfind-modules.json) |

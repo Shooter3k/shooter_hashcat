@@ -212,7 +212,8 @@ static bool autotune_cache_entry_valid (const hc_device_param_t *device_param, c
   if (entry->kernel_loops < device_param->kernel_loops_min) return false;
   if (entry->kernel_loops > device_param->kernel_loops_max) return false;
 
-  if (entry->kernel_threads == 0) return false;
+  if (entry->kernel_threads < device_param->kernel_threads_min) return false;
+  if (entry->kernel_threads > device_param->kernel_threads_max) return false;
   if (entry->kernel_threads > device_param->device_maxworkgroup_size) return false;
 
   if (entry->exec_msec <= 0) return false;
@@ -221,8 +222,32 @@ static bool autotune_cache_entry_valid (const hc_device_param_t *device_param, c
   return true;
 }
 
-static bool autotune_cache_lookup (hashcat_ctx_t *hashcat_ctx, hc_device_param_t *device_param, u32 *kernel_accel, u32 *kernel_loops, u32 *kernel_threads)
+static bool autotune_cache_key_previous_build_compatible (const autotune_cache_key_t *wanted_key, const autotune_cache_key_t *entry_key)
 {
+  // The executable compile time changes on every build even when the GPU,
+  // attack configuration and tuning limits remain compatible. Salt and
+  // digest counts affect lookup density, but not candidate construction or
+  // the tuning range. An older or differently sized entry is therefore used
+  // only as measured starting geometry; autotune validates it on the current
+  // kernel and real workload before promotion.
+
+  autotune_cache_key_t wanted = *wanted_key;
+  autotune_cache_key_t entry  = *entry_key;
+
+  wanted.comptime = 0;
+  entry.comptime  = 0;
+  wanted.salts_cnt   = 0;
+  entry.salts_cnt    = 0;
+  wanted.digests_cnt = 0;
+  entry.digests_cnt  = 0;
+
+  return memcmp (&wanted, &entry, sizeof (autotune_cache_key_t)) == 0;
+}
+
+static bool autotune_cache_lookup (hashcat_ctx_t *hashcat_ctx, hc_device_param_t *device_param, u32 *kernel_accel, u32 *kernel_loops, u32 *kernel_threads, bool *requires_promotion)
+{
+  *requires_promotion = false;
+
   if (autotune_cache_allowed (hashcat_ctx, device_param) == false) return false;
 
   device_param->autotune_cache_eligible = true;
@@ -250,6 +275,15 @@ static bool autotune_cache_lookup (hashcat_ctx_t *hashcat_ctx, hc_device_param_t
 
   bool found = false;
 
+  bool compatible_found    = false;
+  bool compatible_covering = false;
+
+  autotune_cache_entry_t compatible_entry;
+
+  memset (&compatible_entry, 0, sizeof (compatible_entry));
+
+  u64 compatible_distance = (u64) -1;
+
   char line_buf[1024];
 
   while (hc_fgets (line_buf, sizeof (line_buf), &fp) != NULL)
@@ -259,19 +293,77 @@ static bool autotune_cache_lookup (hashcat_ctx_t *hashcat_ctx, hc_device_param_t
     autotune_cache_entry_t entry;
 
     if (autotune_cache_entry_parse (line_buf, &entry) != 28) continue;
-    if (memcmp (&wanted_key, &entry.key, sizeof (wanted_key)) != 0) continue;
     if (autotune_cache_entry_valid (device_param, &entry) == false) continue;
 
-    *kernel_accel = entry.kernel_accel;
-    *kernel_loops = entry.kernel_loops;
-    *kernel_threads = entry.kernel_threads;
+    const bool exact_match = memcmp (&wanted_key, &entry.key, sizeof (wanted_key)) == 0;
 
-    device_param->autotune_cache_msec = entry.exec_msec;
+    if (exact_match == true)
+    {
+      *kernel_accel   = entry.kernel_accel;
+      *kernel_loops   = entry.kernel_loops;
+      *kernel_threads = entry.kernel_threads;
 
-    found = true;
+      device_param->autotune_cache_msec = entry.exec_msec;
+
+      *requires_promotion = false;
+
+      found = true;
+
+      continue;
+    }
+
+    if (found == true) continue;
+    if (autotune_cache_key_previous_build_compatible (&wanted_key, &entry.key) == false) continue;
+
+    const bool covering = (entry.key.salts_cnt   >= wanted_key.salts_cnt)
+                       && (entry.key.digests_cnt >= wanted_key.digests_cnt);
+
+    const u64 salts_distance = (entry.key.salts_cnt >= wanted_key.salts_cnt)
+                             ? (u64) entry.key.salts_cnt - wanted_key.salts_cnt
+                             : (u64) wanted_key.salts_cnt - entry.key.salts_cnt;
+    const u64 digests_distance = (entry.key.digests_cnt >= wanted_key.digests_cnt)
+                               ? (u64) entry.key.digests_cnt - wanted_key.digests_cnt
+                               : (u64) wanted_key.digests_cnt - entry.key.digests_cnt;
+
+    const u64 distance = salts_distance + digests_distance;
+
+    if (compatible_found == true)
+    {
+      if ((compatible_covering == true) && (covering == false)) continue;
+      if ((compatible_covering == covering) && (distance >= compatible_distance)) continue;
+    }
+
+    compatible_entry    = entry;
+    compatible_distance = distance;
+    compatible_covering = covering;
+    compatible_found    = true;
   }
 
   hc_fclose (&fp);
+
+  if ((found == false) && (compatible_found == true))
+  {
+    *kernel_accel   = compatible_entry.kernel_accel;
+    *kernel_loops   = compatible_entry.kernel_loops;
+    *kernel_threads = compatible_entry.kernel_threads;
+
+    device_param->autotune_cache_msec = compatible_entry.exec_msec;
+
+    *requires_promotion = true;
+
+    found = true;
+
+    if ((hashcat_ctx->user_options->task_time_breakdown == true) && (device_param->device_id == 0))
+    {
+      event_log_info (hashcat_ctx,
+        "Shooter reusable autotune cache: validating build %d, salts/digests %u/%u with learned %u/%u",
+        compatible_entry.key.comptime,
+        wanted_key.salts_cnt,
+        wanted_key.digests_cnt,
+        compatible_entry.key.salts_cnt,
+        compatible_entry.key.digests_cnt);
+    }
+  }
 
   return found;
 }
@@ -795,7 +887,9 @@ static int autotune (hashcat_ctx_t *hashcat_ctx, hc_device_param_t *device_param
 
   bool workload_prepared = false;
 
-  bool cache_hit = autotune_cache_lookup (hashcat_ctx, device_param, &kernel_accel, &kernel_loops, &kernel_threads);
+  bool cache_requires_promotion = false;
+
+  bool cache_hit = autotune_cache_lookup (hashcat_ctx, device_param, &kernel_accel, &kernel_loops, &kernel_threads, &cache_requires_promotion);
 
   if (cache_hit == true)
   {
@@ -836,8 +930,18 @@ static int autotune (hashcat_ctx_t *hashcat_ctx, hc_device_param_t *device_param
     }
     else
     {
-      device_param->autotune_cache_hit = true;
+      // A prior-build profile must be written under the current build key
+      // after successful validation.  Keep the local cache hit so the attack
+      // uses the learned geometry, while finalize() sees it as promotable.
+
+      device_param->autotune_cache_hit = (cache_requires_promotion == false);
       device_param->autotune_cache_msec = measured_msec;
+
+      if ((cache_requires_promotion == true) && (device_param->device_id == 0) && (user_options->quiet == false))
+      {
+        event_log_info (hashcat_ctx, "Validated a reusable autotune profile; refreshing it for the current build and workload size.");
+        event_log_info (hashcat_ctx, NULL);
+      }
     }
   }
 

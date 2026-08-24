@@ -6,6 +6,16 @@ autotune and stores the selected kernel accel, loops, threads, and measured
 kernel time in `hashcat.autotune-cache`. Later matching runs validate that
 profile with two short kernel launches and reuse it, avoiding the full search.
 
+Profiles also remain useful after rebuilding Hashcat. The build timestamp is
+not trusted across executables: an otherwise identical prior-build entry only
+supplies its learned acceleration, loops, and thread geometry. The current
+kernel measures that geometry against the real workload before using it. A
+successful validation writes a fresh current-build entry; a rejected value
+falls through to normal autotune. The lookup searches every otherwise
+compatible entry, preferring one that covers the current salt/digest counts
+and then the nearest workload size. GPU, driver, hash/attack configuration,
+optimization flags, and tuning limits must still match.
+
 The twelve 4090s in one machine share a profile when their relevant limits are
 identical, so the cache stores one entry rather than twelve duplicate entries.
 

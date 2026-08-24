@@ -18,5 +18,9 @@ runtime adjustment so a device pause does not silently change the limit.
 Example prompt:
 
 ```text
-[s]tatus [p]ause [b]ypass [c]heckpoint [f]inish [q]uit [e]xtend [l]ower =>
+[s]tatus [p]ause [b]ypass [g]oto [c]heckpoint [f]inish [q]uit [e]xtend [l]ower =>
 ```
+
+The always-available `g` key is separate from runtime extension. It seeks new
+dispatch forward by percentage or one-based line/base position; see
+[Live forward seek](live-goto.md).

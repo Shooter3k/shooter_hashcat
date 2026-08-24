@@ -394,7 +394,28 @@ static void main_log (hashcat_ctx_t *hashcat_ctx, FILE *fp, const int loglevel)
 
   const size_t prev_len = event_ctx->prev_len;
 
-  if (prev_len) main_log_clear_line (prev_len, fp);
+  if (prev_len)
+  {
+    FILE *prev_fp = (event_ctx->prev_on_stderr == true) ? stderr : stdout;
+
+    const bool prev_is_terminal = (prev_fp == stderr) ? is_stderr_terminal () : is_stdout_terminal ();
+
+    if (prev_is_terminal == true)
+    {
+      main_log_clear_line (prev_len, prev_fp);
+    }
+    else
+    {
+      // No-newline events are progress-line replacements on an interactive terminal. Redirected
+      // streams cannot erase that previous text, so terminate the pending record before emitting
+      // the replacement. Without this, worker/transcript output becomes e.g.
+      // "Please be patient...Counted lines" and several parse/sort events run together.
+
+      fwrite (EOL, strlen (EOL), 1, prev_fp);
+
+      fflush (prev_fp);
+    }
+  }
 
   if (msg_newline == true)
   {
@@ -402,7 +423,8 @@ static void main_log (hashcat_ctx_t *hashcat_ctx, FILE *fp, const int loglevel)
   }
   else
   {
-    event_ctx->prev_len = msg_len;
+    event_ctx->prev_len       = msg_len;
+    event_ctx->prev_on_stderr = (fp == stderr);
   }
 
   #if defined (_WIN)

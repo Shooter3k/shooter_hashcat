@@ -5,6 +5,7 @@
 
 #include "common.h"
 #include "types.h"
+#include <inttypes.h>
 #include "event.h"
 #include "timer.h"
 #include "user_options.h"
@@ -223,6 +224,182 @@ int myquit (hashcat_ctx_t *hashcat_ctx)
   status_ctx->run_main_level3   = false;
   status_ctx->run_thread_level1 = false;
   status_ctx->run_thread_level2 = false;
+
+  return 0;
+}
+
+static bool live_seek_parse (const char *request, u64 *value)
+{
+  const u8 *ptr = (const u8 *) request;
+
+  while ((*ptr == ' ') || (*ptr == '\t')) ptr++;
+
+  if ((*ptr < '0') || (*ptr > '9')) return false;
+
+  u64 parsed = 0;
+
+  const u64 max_u64 = -1ULL;
+
+  while ((*ptr >= '0') && (*ptr <= '9'))
+  {
+    const u64 digit = *ptr - '0';
+
+    if (parsed > ((max_u64 - digit) / 10)) return false;
+
+    parsed = (parsed * 10) + digit;
+
+    ptr++;
+  }
+
+  while ((*ptr == ' ') || (*ptr == '\t')) ptr++;
+
+  if (*ptr != 0) return false;
+
+  *value = parsed;
+
+  return true;
+}
+
+int live_seek (hashcat_ctx_t *hashcat_ctx, const char *request)
+{
+  hashes_t             *hashes             = hashcat_ctx->hashes;
+  status_ctx_t         *status_ctx         = hashcat_ctx->status_ctx;
+  const user_options_t *user_options       = hashcat_ctx->user_options;
+  const user_options_extra_t *user_options_extra = hashcat_ctx->user_options_extra;
+
+  u64 requested = 0;
+
+  if (live_seek_parse (request, &requested) == false)
+  {
+    event_log_warning (hashcat_ctx, "Go-to needs one whole number: 0 through 100 is a percentage; anything above 100 is a one-based line/base position.");
+
+    return -1;
+  }
+
+  if (user_options->stdout_flag == true)
+  {
+    event_log_warning (hashcat_ctx, "Go-to is unavailable with --stdout because skipping would break ordered candidate output.");
+
+    return -1;
+  }
+
+  if (user_options_extra->wordlist_mode == WL_MODE_STDIN)
+  {
+    event_log_warning (hashcat_ctx, "Go-to is unavailable for candidates read from stdin because that stream cannot seek forward by position.");
+
+    return -1;
+  }
+
+  hc_thread_mutex_lock (status_ctx->mux_dispatcher);
+
+  const bool active = ((status_ctx->devices_status == STATUS_RUNNING) || (status_ctx->devices_status == STATUS_PAUSED));
+
+  if ((status_ctx->accessible == false) || (active == false))
+  {
+    hc_thread_mutex_unlock (status_ctx->mux_dispatcher);
+
+    event_log_warning (hashcat_ctx, "Go-to is available only while an attack is running or paused.");
+
+    return -1;
+  }
+
+  const u64 end = (status_ctx->words_limit == 0)
+                ? status_ctx->words_base
+                : MIN (status_ctx->words_limit, status_ctx->words_base);
+
+  if ((end == 0) || (end == -1ULL))
+  {
+    hc_thread_mutex_unlock (status_ctx->mux_dispatcher);
+
+    event_log_warning (hashcat_ctx, "Go-to cannot be used because the current base keyspace size is unknown.");
+
+    return -1;
+  }
+
+  const bool percentage = (requested <= 100);
+
+  u64 target;
+
+  if (percentage == true)
+  {
+    target = ((end / 100) * requested) + (((end % 100) * requested) / 100);
+  }
+  else
+  {
+    target = requested - 1;
+
+    if (target >= end)
+    {
+      hc_thread_mutex_unlock (status_ctx->mux_dispatcher);
+
+      event_log_warning (hashcat_ctx, "Go-to line/base position is outside the current keyspace (maximum: %" PRIu64 ").", end);
+
+      return -1;
+    }
+  }
+
+  const u64 from = status_ctx->words_off;
+
+  if (target <= from)
+  {
+    hc_thread_mutex_unlock (status_ctx->mux_dispatcher);
+
+    const double current_percent = ((double) from / (double) end) * 100.0;
+
+    event_log_warning (hashcat_ctx, "Go-to is forward-only. The next undispatched line/base position is %" PRIu64 " of %" PRIu64 " (%.2f%%).", MIN (from + 1, end), end, current_percent);
+
+    return -1;
+  }
+
+  const u64 skipped = target - from;
+  const u64 amplifier = user_options_extra_amplifier (hashcat_ctx);
+
+  // Keep dispatch stopped until its skipped range is visible in progress. In
+  // particular, a 100-percent seek can make the device threads finish as soon
+  // as this mutex is released, so publishing the counters afterwards could
+  // leave the final status one interval short.
+  hc_thread_mutex_lock (status_ctx->mux_counter);
+
+  if (user_options->attack_mode == ATTACK_MODE_ASSOCIATION)
+  {
+    const u64 salt_end = MIN (target, hashes->salts_cnt);
+
+    for (u64 salt_pos = from; salt_pos < salt_end; salt_pos++)
+    {
+      status_ctx->words_progress_rejected[salt_pos] += amplifier;
+    }
+  }
+  else
+  {
+    for (u32 salt_pos = 0; salt_pos < hashes->salts_cnt; salt_pos++)
+    {
+      status_ctx->words_progress_rejected[salt_pos] += skipped * amplifier;
+    }
+  }
+
+  hc_thread_mutex_unlock (status_ctx->mux_counter);
+
+  if (user_options->slow_candidates == true) status_ctx->words_seek_guard = target;
+
+  status_ctx->words_off = target;
+
+  hc_thread_mutex_unlock (status_ctx->mux_dispatcher);
+
+  if (target == end)
+  {
+    event_log_info (hashcat_ctx, "Go-to accepted: %" PRIu64 "%% selected the end of the current base keyspace (%" PRIu64 " positions).", requested, end);
+    event_log_info (hashcat_ctx, "Skipped %" PRIu64 " undispatched base positions; already-assigned GPU work will finish before the attack completes.", skipped);
+  }
+  else if (percentage == true)
+  {
+    event_log_info (hashcat_ctx, "Go-to accepted: %" PRIu64 "%% maps to line/base position %" PRIu64 " of %" PRIu64 ".", requested, target + 1, end);
+    event_log_info (hashcat_ctx, "Skipped %" PRIu64 " undispatched base positions; new GPU dispatch starts there after already-assigned work.", skipped);
+  }
+  else
+  {
+    event_log_info (hashcat_ctx, "Go-to accepted: line/base position %" PRIu64 " of %" PRIu64 ".", requested, end);
+    event_log_info (hashcat_ctx, "Skipped %" PRIu64 " undispatched base positions; new GPU dispatch starts there after already-assigned work.", skipped);
+  }
 
   return 0;
 }

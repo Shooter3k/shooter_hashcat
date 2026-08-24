@@ -440,10 +440,10 @@ static size_t event_log_dispatch (hashcat_ctx_t *hashcat_ctx, const u32 id, cons
 {
   event_ctx_t *event_ctx = hashcat_ctx->event_ctx;
 
-  // Every log level shares msg_buf, msg_len, msg_newline and prev_len. Autotune runs one thread per
-  // physical GPU, so formatting and printing must be one atomic operation or one device can publish
-  // another device's message. A separate mutex is required because non-log event callbacks hold
-  // mux_event and are allowed to log without recursively locking that same mutex.
+  // Every log level shares msg_buf, msg_len, msg_newline, prev_len and prev_on_stderr. Autotune runs
+  // one thread per physical GPU, so formatting and printing must be one atomic operation or one
+  // device can publish another device's message. A separate mutex is required because non-log event
+  // callbacks hold mux_event and are allowed to log without recursively locking that same mutex.
 
   hc_thread_mutex_lock (event_ctx->mux_log);
 
@@ -601,7 +601,8 @@ int event_ctx_init (hashcat_ctx_t *hashcat_ctx)
   event_ctx->msg_len = 0;
   event_ctx->msg_newline = false;
 
-  event_ctx->prev_len = 0;
+  event_ctx->prev_len       = 0;
+  event_ctx->prev_on_stderr = false;
 
   hc_thread_mutex_init (event_ctx->mux_event);
 

@@ -32,17 +32,17 @@ static const size_t MAXIMUM_EXAMPLE_HASH_LENGTH = 200;
 
 static const size_t TERMINAL_LINE_LENGTH = 79;
 
-static const char *const PROMPT_ACTIVE = "[s]tatus [p]ause [b]ypass [c]heckpoint [f]inish [q]uit => ";
-static const char *const PROMPT_PAUSED = "[s]tatus [r]esume [b]ypass [c]heckpoint [f]inish [q]uit => ";
+static const char *const PROMPT_ACTIVE = "[s]tatus [p]ause [b]ypass [g]oto [c]heckpoint [f]inish [q]uit => ";
+static const char *const PROMPT_PAUSED = "[s]tatus [r]esume [b]ypass [g]oto [c]heckpoint [f]inish [q]uit => ";
 
-static const char *const RUNTIME_PROMPT_ACTIVE = "[s]tatus [p]ause [b]ypass [c]heckpoint [f]inish [q]uit [e]xtend [l]ower => ";
-static const char *const RUNTIME_PROMPT_PAUSED = "[s]tatus [r]esume [b]ypass [c]heckpoint [f]inish [q]uit [e]xtend [l]ower => ";
+static const char *const RUNTIME_PROMPT_ACTIVE = "[s]tatus [p]ause [b]ypass [g]oto [c]heckpoint [f]inish [q]uit [e]xtend [l]ower => ";
+static const char *const RUNTIME_PROMPT_PAUSED = "[s]tatus [r]esume [b]ypass [g]oto [c]heckpoint [f]inish [q]uit [e]xtend [l]ower => ";
 
-static const char *const OUTCHECK_PROMPT_ACTIVE = "[s]tatus [p]ause [b]ypass [c]heckpoint [f]inish [q]uit [i]gnore outfile => ";
-static const char *const OUTCHECK_PROMPT_PAUSED = "[s]tatus [r]esume [b]ypass [c]heckpoint [f]inish [q]uit [i]gnore outfile => ";
+static const char *const OUTCHECK_PROMPT_ACTIVE = "[s]tatus [p]ause [b]ypass [g]oto [c]heckpoint [f]inish [q]uit [i]gnore outfile => ";
+static const char *const OUTCHECK_PROMPT_PAUSED = "[s]tatus [r]esume [b]ypass [g]oto [c]heckpoint [f]inish [q]uit [i]gnore outfile => ";
 
-static const char *const RUNTIME_OUTCHECK_PROMPT_ACTIVE = "[s]tatus [p]ause [b]ypass [c]heckpoint [f]inish [q]uit [e]xtend [l]ower [i]gnore outfile => ";
-static const char *const RUNTIME_OUTCHECK_PROMPT_PAUSED = "[s]tatus [r]esume [b]ypass [c]heckpoint [f]inish [q]uit [e]xtend [l]ower [i]gnore outfile => ";
+static const char *const RUNTIME_OUTCHECK_PROMPT_ACTIVE = "[s]tatus [p]ause [b]ypass [g]oto [c]heckpoint [f]inish [q]uit [e]xtend [l]ower [i]gnore outfile => ";
+static const char *const RUNTIME_OUTCHECK_PROMPT_PAUSED = "[s]tatus [r]esume [b]ypass [g]oto [c]heckpoint [f]inish [q]uit [e]xtend [l]ower [i]gnore outfile => ";
 
 static const char *terminal_prompt (hashcat_ctx_t *hashcat_ctx)
 {
@@ -345,6 +345,65 @@ static void keypress (hashcat_ctx_t *hashcat_ctx)
 
         break;
 
+      case 'g':
+      case 'G':
+
+        event_log_info (hashcat_ctx, NULL);
+
+        tty_fix ();
+
+        {
+          FILE *prompt_fp = (user_options->stdout_flag == true) ? stderr : stdout;
+
+          char request[64] = { 0 };
+
+          fprintf (prompt_fp, "Go to percentage (0-100) or one-based line/base position (>100); blank cancels: ");
+          fflush (prompt_fp);
+
+          const bool read_ok = (fgets (request, sizeof (request), stdin) != NULL);
+
+          bool too_long = false;
+
+          if (read_ok == true)
+          {
+            const size_t request_len = strlen (request);
+
+            if ((request_len > 0) && (request[request_len - 1] != '\n') && (request[request_len - 1] != '\r'))
+            {
+              int extra;
+
+              while (((extra = fgetc (stdin)) != '\n') && (extra != EOF)) { }
+
+              too_long = true;
+            }
+
+            request[strcspn (request, "\r\n")] = 0;
+          }
+
+          tty_break ();
+
+          event_log_info (hashcat_ctx, NULL);
+
+          if ((read_ok == false) || (request[0] == 0))
+          {
+            event_log_info (hashcat_ctx, "Go-to canceled.");
+          }
+          else if (too_long == true)
+          {
+            event_log_warning (hashcat_ctx, "Go-to value is too long.");
+          }
+          else
+          {
+            live_seek (hashcat_ctx, request);
+          }
+        }
+
+        event_log_info (hashcat_ctx, NULL);
+
+        if (show_prompt == true) send_prompt (hashcat_ctx);
+
+        break;
+
       case 'p':
 
         if (status_ctx->devices_status != STATUS_PAUSED)
@@ -368,7 +427,7 @@ static void keypress (hashcat_ctx_t *hashcat_ctx)
             if (pause_time[pause_time_len - 1] == '\n') pause_time[pause_time_len - 1] = 0;
             if (pause_time[pause_time_len - 2] == '\r') pause_time[pause_time_len - 2] = 0;
 
-            event_log_info (hashcat_ctx, "Paused at %s", pause_time);
+            event_log_info (hashcat_ctx, "Worker action accepted: pause at %s", pause_time);
           }
 
           event_log_info (hashcat_ctx, NULL);
@@ -414,7 +473,7 @@ static void keypress (hashcat_ctx_t *hashcat_ctx)
 
             format_timer_display (tmp, display_pause, HCBUFSIZ_TINY);
 
-            event_log_info (hashcat_ctx, "Resumed at %s (paused for %s)", resume_time, display_pause);
+            event_log_info (hashcat_ctx, "Worker action accepted: resume at %s (paused for %s)", resume_time, display_pause);
 
             hcfree (display_pause);
           }

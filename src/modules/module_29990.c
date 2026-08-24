@@ -24,14 +24,14 @@ static const u32   DGST_SIZE      = DGST_SIZE_4_8;
 static const u32   HASH_CATEGORY  = HASH_CATEGORY_GENERIC_KDF;
 static const char *HASH_NAME      = "CMIYC 2026 memory-hard SHA-512 (private)";
 static const u64   KERN_TYPE      = 29990;
-static const u32   OPTI_TYPE      = OPTI_TYPE_ZERO_BYTE;
+static const u32   OPTI_TYPE      = OPTI_TYPE_ZERO_BYTE | OPTI_TYPE_USES_BITS_64;
 static const u64   OPTS_TYPE      = OPTS_TYPE_STOCK_MODULE
                                   | OPTS_TYPE_PT_GENERATE_LE
                                   | OPTS_TYPE_THREAD_MULTI_DISABLE
                                   | OPTS_TYPE_MP_MULTI_DISABLE;
 static const u32   SALT_TYPE      = SALT_TYPE_EMBEDDED;
-static const char *ST_PASS        = "password";
-static const char *ST_HASH        = "$cmiyc$2026$1$10$AAECAwQFBgcICQoLDA0ODw$quWcjQj6TAyxtT2gJVW4ulZv8eSec1eFYRkSOTaWLrg";
+static const char *ST_PASS        = "Always";
+static const char *ST_HASH        = "$cmiyc$2026$1$10$AAECAwQFBgcICQoLDA0ODw$PeDdIxtm9EBCX5W2QI9GTX9UVM4Vp-iPT-ntbNzcd_Q";
 
 u32         module_attack_exec    (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra) { return ATTACK_EXEC;   }
 u32         module_dgst_pos0      (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra) { return DGST_POS0;     }
