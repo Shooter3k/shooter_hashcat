@@ -1,5 +1,27 @@
 # shooter_hashcat release notes
 
+## v7.1.2-shooter.20260831.59
+
+Native Argon2 with an MD5-prehashed password input.
+
+### Added
+
+- Add hash mode `34900`, `Argon2(md5($pass))`. Candidate generation, masks,
+  rules, hybrid attacks, and Shooter mode 13 continue to operate on the
+  original plaintext. The GPU kernel converts the finished candidate to a
+  lowercase 32-character MD5 hexadecimal string immediately before Argon2.
+- Support standard PHC strings for Argon2d, Argon2i, and Argon2id, versions 16
+  and 19, while preserving each hash's memory, iteration, parallelism, salt,
+  and digest-length parameters.
+
+### Verified
+
+- Verify independently generated vectors for all three Argon2 variants and
+  both supported versions on CUDA, including built-in self-test, mask, and
+  rule-based recovery paths.
+- Regression-test standard mode `34000` after sharing its host-side PHC parser
+  and memory/tuning integration with the new mode.
+
 ## v7.1.2-shooter.20260824.58
 
 Clean Windows rebuild and synchronized recovery release.

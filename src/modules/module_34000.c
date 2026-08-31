@@ -20,8 +20,20 @@ static const u32   DGST_POS2      = 2;
 static const u32   DGST_POS3      = 3;
 static const u32   DGST_SIZE      = DGST_SIZE_8_16;
 static const u32   HASH_CATEGORY  = HASH_CATEGORY_GENERIC_KDF;
-static const char *HASH_NAME      = "Argon2";
-static const u64   KERN_TYPE      = 34000;
+#ifndef ARGON2_MODULE_HASH_NAME
+#define ARGON2_MODULE_HASH_NAME "Argon2"
+#endif
+
+#ifndef ARGON2_MODULE_KERN_TYPE
+#define ARGON2_MODULE_KERN_TYPE 34000
+#endif
+
+#ifndef ARGON2_MODULE_ST_HASH
+#define ARGON2_MODULE_ST_HASH "$argon2id$v=19$m=65536,t=3,p=1$FBMjI4RJBhIykCgol1KEJA$2ky5GAdhT1kH4kIgPN/oERE3Taiy43vNN70a3HpiKQU"
+#endif
+
+static const char *HASH_NAME      = ARGON2_MODULE_HASH_NAME;
+static const u64   KERN_TYPE      = ARGON2_MODULE_KERN_TYPE;
 static const u32   OPTI_TYPE      = OPTI_TYPE_ZERO_BYTE
                                   | OPTI_TYPE_SLOW_HASH_DIMY_LOOP;
 static const u64   OPTS_TYPE      = OPTS_TYPE_STOCK_MODULE
@@ -30,7 +42,7 @@ static const u64   OPTS_TYPE      = OPTS_TYPE_STOCK_MODULE
                                   | OPTS_TYPE_MP_MULTI_DISABLE;
 static const u32   SALT_TYPE      = SALT_TYPE_EMBEDDED;
 static const char *ST_PASS        = "hashcat";
-static const char *ST_HASH        = "$argon2id$v=19$m=65536,t=3,p=1$FBMjI4RJBhIykCgol1KEJA$2ky5GAdhT1kH4kIgPN/oERE3Taiy43vNN70a3HpiKQU";
+static const char *ST_HASH        = ARGON2_MODULE_ST_HASH;
 
 u32         module_attack_exec    (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra) { return ATTACK_EXEC;     }
 u32         module_dgst_pos0      (MAYBE_UNUSED const hashconfig_t *hashconfig, MAYBE_UNUSED const user_options_t *user_options, MAYBE_UNUSED const user_options_extra_t *user_options_extra) { return DGST_POS0;       }
@@ -315,4 +327,3 @@ void module_init (module_ctx_t *module_ctx)
   module_ctx->module_usage_notice             = MODULE_DEFAULT;
   module_ctx->module_warmup_disable           = MODULE_DEFAULT;
 }
-

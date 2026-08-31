@@ -24,6 +24,15 @@ Usage: hashcat [options]... hash|hashfile|hccapxfile [dictionary|mask|directory]
      --status-restore-sub       |      | Show per-device Restore.Sub details in status        |
      --stage-profile            |      | Show final pipeline stage time and peak memory       |
      --stage-profile-json       |      | Show final stage profile as one JSON object          |
+     --task-time-breakdown      |      | Show measured end-to-end task time breakdown         |
+     --candidate-min-upper      | Num  | Require at least N ASCII uppercase candidate bytes   | --candidate-min-upper=1
+     --candidate-min-lower      | Num  | Require at least N ASCII lowercase candidate bytes   | --candidate-min-lower=1
+     --candidate-min-digit      | Num  | Require at least N ASCII digit candidate bytes       | --candidate-min-digit=1
+     --candidate-min-symbol     | Num  | Require at least N non-alphanumeric candidate bytes  | --candidate-min-symbol=1
+     --require-upper            |      | Require at least one ASCII uppercase candidate byte  |
+     --require-lower            |      | Require at least one ASCII lowercase candidate byte  |
+     --require-digit            |      | Require at least one ASCII digit candidate byte      |
+     --require-symbol           |      | Require at least one non-alphanumeric candidate byte |
      --status-timer             | Num  | Sets seconds between status screen updates to X      | --status-timer=1
      --stdin-timeout-abort      | Num  | Abort if there is no input from stdin for X seconds  | --stdin-timeout-abort=300
      --machine-readable         |      | Display the status view in a machine-readable format |
