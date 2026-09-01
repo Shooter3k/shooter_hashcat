@@ -145,7 +145,9 @@ static int outfile_remove (hashcat_ctx_t *hashcat_ctx, const bool preflight)
 
     if (outfile_check_ignore_requested (hashcat_ctx) == true) break;
 
-    if ((preflight == false) && (status_ctx->devices_status != STATUS_RUNNING)) continue;
+    if ((preflight == false)
+     && (status_ctx->devices_status != STATUS_RUNNING)
+     && (status_ctx->devices_status != STATUS_PAUSED)) continue;
 
     if (preflight == false)
     {
