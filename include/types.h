@@ -3580,9 +3580,10 @@ typedef struct status_ctx
   u32         runtime_status;
   hc_timer_t  timer_runtime_paused;
   double      msec_runtime_paused;
-  bool        runtime_lower_enabled;
-  hc_timer_t  timer_runtime_lowered;
-  double      msec_runtime_lowered;
+  bool        runtime_lower_enabled; // reserved for layout compatibility with the former 2x mode
+  hc_timer_t  timer_runtime_lowered; // reserved for layout compatibility with the former 2x mode
+  double      msec_runtime_lowered;  // fixed cumulative reduction from [l]ower presses
+  u32         runtime_lower_percent;
 
 } status_ctx_t;
 

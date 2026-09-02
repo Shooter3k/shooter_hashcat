@@ -387,15 +387,16 @@ void event_call (const u32 id, hashcat_ctx_t *hashcat_ctx, const void *buf, cons
 
   hashcat_ctx->event (id, hashcat_ctx, buf, len);
 
-  if (is_log == false)
-  {
-    hc_thread_mutex_unlock (event_ctx->mux_event);
-  }
-
   // add more back logs in case user wants to access them. Cracked-result
   // events are deliberately excluded: callers still receive every callback,
   // but retaining and shifting ten prior results for every crack adds a hot
   // O(MAX_OLD_EVENTS) memory path to very large result sets.
+  //
+  // Keep this update under mux_event as well. Parallel per-GPU session setup
+  // dispatches device events from twelve threads. Releasing the mutex before
+  // shifting old_buf/old_len allowed those threads to overlap memcpy calls and
+  // corrupt the event history (and occasionally adjacent process state), which
+  // surfaced later as an ntdll access violation in a resident worker.
 
   if (is_log == false && id != EVENT_CRACKER_HASH_CRACKED)
   {
@@ -420,6 +421,11 @@ void event_call (const u32 id, hashcat_ctx_t *hashcat_ctx, const void *buf, cons
     }
 
     event_ctx->old_len[0] = copy_len;
+  }
+
+  if (is_log == false)
+  {
+    hc_thread_mutex_unlock (event_ctx->mux_event);
   }
 }
 

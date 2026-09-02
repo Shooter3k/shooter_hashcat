@@ -554,28 +554,25 @@ int ResumeRuntime (hashcat_ctx_t *hashcat_ctx)
   return 0;
 }
 
-int StartLowerRuntime (hashcat_ctx_t *hashcat_ctx)
+int LowerRuntime (hashcat_ctx_t *hashcat_ctx)
 {
   status_ctx_t *status_ctx = hashcat_ctx->status_ctx;
+  user_options_t *user_options = hashcat_ctx->user_options;
 
-  hc_timer_set (&status_ctx->timer_runtime_lowered);
+  if (user_options->runtime == 0) return -1;
+  if (status_ctx->runtime_lower_percent >= 100) return -1;
 
-  status_ctx->runtime_lower_enabled = true;
+  status_ctx->runtime_lower_percent++;
 
-  return 0;
-}
+  // One percent of a runtime expressed in seconds is runtime * 10
+  // milliseconds. Recalculate from the original limit and the cumulative
+  // integer percentage so ten presses are exactly 10%, not a compounded
+  // reduction of the already-reduced remainder.
+  status_ctx->msec_runtime_lowered = (double) user_options->runtime
+                                   * 10.0
+                                   * status_ctx->runtime_lower_percent;
 
-int StopLowerRuntime (hashcat_ctx_t *hashcat_ctx)
-{
-  status_ctx_t *status_ctx = hashcat_ctx->status_ctx;
-
-  const double msec_runtime_lowered = hc_timer_get (status_ctx->timer_runtime_lowered);
-
-  status_ctx->msec_runtime_lowered += msec_runtime_lowered;
-
-  status_ctx->runtime_lower_enabled = false;
-
-  return 0;
+  return (int) status_ctx->runtime_lower_percent;
 }
 
 int stop_at_checkpoint (hashcat_ctx_t *hashcat_ctx)

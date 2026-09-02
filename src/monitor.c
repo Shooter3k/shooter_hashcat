@@ -21,7 +21,7 @@ int get_runtime_left (const hashcat_ctx_t *hashcat_ctx)
 
   double msec_paused = status_ctx->msec_paused;
   double msec_runtime_paused = status_ctx->msec_runtime_paused;
-  double msec_runtime_lowered = status_ctx->msec_runtime_lowered;
+  const double msec_runtime_lowered = status_ctx->msec_runtime_lowered;
 
   if (status_ctx->devices_status == STATUS_PAUSED)
   {
@@ -30,7 +30,6 @@ int get_runtime_left (const hashcat_ctx_t *hashcat_ctx)
     msec_paused += msec_paused_tmp;
 
     hc_timer_set (&status_ctx->timer_runtime_paused);
-    hc_timer_set (&status_ctx->timer_runtime_lowered);
   }
   else if (status_ctx->runtime_status == STATUS_PAUSED)
   {
@@ -38,20 +37,10 @@ int get_runtime_left (const hashcat_ctx_t *hashcat_ctx)
 
     msec_runtime_paused += msec_runtime_paused_tmp;
 
-    hc_timer_set (&status_ctx->timer_runtime_lowered);
-  }
-  else if (status_ctx->runtime_lower_enabled == true)
-  {
-    double msec_runtime_lowered_tmp = hc_timer_get (status_ctx->timer_runtime_lowered);
-
-    msec_runtime_lowered += msec_runtime_lowered_tmp;
-
-    hc_timer_set (&status_ctx->timer_runtime_paused);
   }
   else
   {
     hc_timer_set (&status_ctx->timer_runtime_paused);
-    hc_timer_set (&status_ctx->timer_runtime_lowered);
   }
 
   time_t runtime_cur;

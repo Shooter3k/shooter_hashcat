@@ -117,8 +117,7 @@ int SuspendThreads (hashcat_ctx_t *hashcat_ctx);
 int ResumeThreads (hashcat_ctx_t *hashcat_ctx);
 int SuspendRuntime (hashcat_ctx_t *hashcat_ctx);
 int ResumeRuntime (hashcat_ctx_t *hashcat_ctx);
-int StartLowerRuntime (hashcat_ctx_t *hashcat_ctx);
-int StopLowerRuntime (hashcat_ctx_t *hashcat_ctx);
+int LowerRuntime (hashcat_ctx_t *hashcat_ctx);
 int stop_at_checkpoint (hashcat_ctx_t *hashcat_ctx);
 int finish_after_attack (hashcat_ctx_t *hashcat_ctx);
 

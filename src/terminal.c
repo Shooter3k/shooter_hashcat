@@ -35,14 +35,14 @@ static const size_t TERMINAL_LINE_LENGTH = 79;
 static const char *const PROMPT_ACTIVE = "[s]tatus [p]ause [b]ypass [g]oto [c]heckpoint [f]inish [q]uit => ";
 static const char *const PROMPT_PAUSED = "[s]tatus [r]esume [b]ypass [g]oto [c]heckpoint [f]inish [q]uit => ";
 
-static const char *const RUNTIME_PROMPT_ACTIVE = "[s]tatus [p]ause [b]ypass [g]oto [c]heckpoint [f]inish [q]uit [e]xtend [l]ower => ";
-static const char *const RUNTIME_PROMPT_PAUSED = "[s]tatus [r]esume [b]ypass [g]oto [c]heckpoint [f]inish [q]uit [e]xtend [l]ower => ";
+static const char *const RUNTIME_PROMPT_ACTIVE = "[s]tatus [p]ause [b]ypass [g]oto [c]heckpoint [f]inish [q]uit [e]xtend [l]ower 1% => ";
+static const char *const RUNTIME_PROMPT_PAUSED = "[s]tatus [r]esume [b]ypass [g]oto [c]heckpoint [f]inish [q]uit [e]xtend [l]ower 1% => ";
 
 static const char *const OUTCHECK_PROMPT_ACTIVE = "[s]tatus [p]ause [b]ypass [g]oto [c]heckpoint [f]inish [q]uit [i]gnore outfile => ";
 static const char *const OUTCHECK_PROMPT_PAUSED = "[s]tatus [r]esume [b]ypass [g]oto [c]heckpoint [f]inish [q]uit [i]gnore outfile => ";
 
-static const char *const RUNTIME_OUTCHECK_PROMPT_ACTIVE = "[s]tatus [p]ause [b]ypass [g]oto [c]heckpoint [f]inish [q]uit [e]xtend [l]ower [i]gnore outfile => ";
-static const char *const RUNTIME_OUTCHECK_PROMPT_PAUSED = "[s]tatus [r]esume [b]ypass [g]oto [c]heckpoint [f]inish [q]uit [e]xtend [l]ower [i]gnore outfile => ";
+static const char *const RUNTIME_OUTCHECK_PROMPT_ACTIVE = "[s]tatus [p]ause [b]ypass [g]oto [c]heckpoint [f]inish [q]uit [e]xtend [l]ower 1% [i]gnore outfile => ";
+static const char *const RUNTIME_OUTCHECK_PROMPT_PAUSED = "[s]tatus [r]esume [b]ypass [g]oto [c]heckpoint [f]inish [q]uit [e]xtend [l]ower 1% [i]gnore outfile => ";
 
 static const char *terminal_prompt (hashcat_ctx_t *hashcat_ctx)
 {
@@ -570,11 +570,6 @@ static void keypress (hashcat_ctx_t *hashcat_ctx)
 
           if (status_ctx->runtime_status == STATUS_RUNNING)
           {
-            if (status_ctx->runtime_lower_enabled == true)
-            {
-              StopLowerRuntime (hashcat_ctx);
-            }
-
             event_log_info (hashcat_ctx, "Extend enabled. Runtime limit is paused.");
 
             SuspendRuntime (hashcat_ctx);
@@ -599,24 +594,17 @@ static void keypress (hashcat_ctx_t *hashcat_ctx)
         {
           event_log_info (hashcat_ctx, NULL);
 
-          if (status_ctx->runtime_status == STATUS_PAUSED)
-          {
-            ResumeRuntime (hashcat_ctx);
-            StartLowerRuntime (hashcat_ctx);
+          const int runtime_lower_percent = LowerRuntime (hashcat_ctx);
 
-            event_log_info (hashcat_ctx, "Extend disabled. Lower enabled. Runtime countdown is running at 2x speed.");
-          }
-          else if (status_ctx->runtime_lower_enabled == false)
+          if (runtime_lower_percent >= 0)
           {
-            StartLowerRuntime (hashcat_ctx);
+            event_log_info (hashcat_ctx, "Runtime limit reduced by 1%% (%d%% total).", runtime_lower_percent);
 
-            event_log_info (hashcat_ctx, "Lower enabled. Runtime countdown is running at 2x speed.");
+            status_display (hashcat_ctx);
           }
           else
           {
-            StopLowerRuntime (hashcat_ctx);
-
-            event_log_info (hashcat_ctx, "Lower disabled. Runtime countdown is running normally.");
+            event_log_info (hashcat_ctx, "Runtime limit is already reduced by 100%%.");
           }
 
           event_log_info (hashcat_ctx, NULL);
@@ -3593,6 +3581,7 @@ void status_display (hashcat_ctx_t *hashcat_ctx)
   const hashconfig_t         *hashconfig         = hashcat_ctx->hashconfig;
   const hwmon_ctx_t          *hwmon_ctx          = hashcat_ctx->hwmon_ctx;
   const pubkey_ctx_t         *pubkey_ctx         = hashcat_ctx->pubkey_ctx;
+  const status_ctx_t         *status_ctx         = hashcat_ctx->status_ctx;
   const user_options_t       *user_options       = hashcat_ctx->user_options;
   const user_options_extra_t *user_options_extra = hashcat_ctx->user_options_extra;
 
@@ -3702,6 +3691,13 @@ void status_display (hashcat_ctx_t *hashcat_ctx)
   "Time.Estimated...: %s (%s)",
   hashcat_status->time_estimated_absolute,
   hashcat_status->time_estimated_relative);
+
+  if (status_ctx->runtime_lower_percent > 0)
+  {
+    event_log_info (hashcat_ctx,
+      "Runtime.Reduced.: %u%% of original limit",
+      status_ctx->runtime_lower_percent);
+  }
 
   if (hashconfig->opti_type & OPTI_TYPE_OPTIMIZED_KERNEL)
   {

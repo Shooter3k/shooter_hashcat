@@ -168,7 +168,9 @@ int hc_cuMemFreePtr (void *hashcat_ctx, CUdeviceptr *dptr)
 
   rc = hc_cuMemFree (hashcat_ctx, *dptr);
 
-  *dptr = 0;
+  // Keep the handle when the driver rejects the free so cleanup diagnostics
+  // and a later teardown attempt do not mistake a live allocation for zero.
+  if (rc == 0) *dptr = 0;
 
   return rc;
 }
@@ -1576,4 +1578,3 @@ int hc_cuCtxSetLimit (void *hashcat_ctx, CUlimit limit, size_t value)
 
   return 0;
 }
-

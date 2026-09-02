@@ -1,5 +1,27 @@
 # shooter_hashcat release notes
 
+## v7.1.2-shooter.20260902.60
+
+### Fixed
+
+- Balance resident CUDA memory across devices by treating a newly created CUDA
+  context as already current and popping it exactly once. This removes the
+  duplicate context-stack entry that could make a recovered worker retain most
+  of its session allocations on one GPU.
+- Bind each device's CUDA context on the parallel session-teardown thread
+  before freeing its allocations. A failed `cuMemFree` now retains its handle
+  instead of silently clearing the pointer while the driver still owns VRAM.
+
+### Improved
+
+- Make retained non-log event history fully thread-safe during parallel GPU
+  session initialization. The event mutex now covers both callback dispatch
+  and `old_buf`/`old_len` history rotation, preventing concurrent device
+  threads from corrupting the shared retained-event state.
+- Change interactive `[l]ower` from a 2x countdown toggle to a cumulative 1%
+  reduction of the original `--runtime` per keypress. Every accepted press now
+  prints an updated status page and the total percentage reduced.
+
 ## v7.1.2-shooter.20260831.59
 
 Native Argon2 with an MD5-prehashed password input.

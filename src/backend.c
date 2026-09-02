@@ -6603,18 +6603,18 @@ HC_API_CALL void *thread_cuda_ctx_init (void *p)
     return 0;
   }
 
-  if (hc_cuCtxPushCurrent (hashcat_ctx, device_param->cuda_context) == -1)
-  {
-    device_param->skipped = true;
-
-    return 0;
-  }
+  // cuCtxCreate() makes the new context current on the calling thread. Do not
+  // push it a second time: a single pop would leave that duplicate entry on
+  // the thread's context stack and later multi-GPU allocations could target
+  // the wrong device.
 
   size_t free  = 0;
   size_t total = 0;
 
   if (hc_cuMemGetInfo (hashcat_ctx, &free, &total) == -1)
   {
+    hc_cuCtxPopCurrent (hashcat_ctx, &device_param->cuda_context);
+
     device_param->skipped = true;
 
     return 0;
@@ -14917,7 +14917,19 @@ void backend_session_context_reset (hashcat_ctx_t *hashcat_ctx)
     {
       hc_cuCtxDestroy (hashcat_ctx, device_param->cuda_context);
 
-      hc_cuCtxCreate (hashcat_ctx, &device_param->cuda_context, CU_CTX_SCHED_BLOCKING_SYNC, device_param->cuda_device);
+      if (hc_cuCtxCreate (hashcat_ctx, &device_param->cuda_context, CU_CTX_SCHED_BLOCKING_SYNC, device_param->cuda_device) == -1)
+      {
+        device_param->skipped = true;
+
+        continue;
+      }
+
+      // cuCtxCreate() leaves this replacement current. Session work binds the
+      // context explicitly, so return the coordinator thread to an empty stack.
+      if (hc_cuCtxPopCurrent (hashcat_ctx, &device_param->cuda_context) == -1)
+      {
+        device_param->skipped = true;
+      }
     }
   }
 }
@@ -19033,6 +19045,16 @@ HC_API_CALL void *thread_backend_session_destroy (void *p)
 
     if (device_param->is_cuda == true)
     {
+      bool cuda_context_pushed = false;
+
+      if (device_param->cuda_context != NULL)
+      {
+        if (hc_cuCtxPushCurrent (hashcat_ctx, device_param->cuda_context) == 0)
+        {
+          cuda_context_pushed = true;
+        }
+      }
+
       hc_cuMemFreePtr           (hashcat_ctx, &device_param->cuda_d_pws_buf);
       hc_cuMemFreePtr           (hashcat_ctx, &device_param->cuda_d_pws_amp_buf);
       hc_cuMemFreePtr           (hashcat_ctx, &device_param->cuda_d_pws_comp_buf);
@@ -19110,6 +19132,11 @@ HC_API_CALL void *thread_backend_session_destroy (void *p)
       device_param->cuda_function_aux2          = NULL;
       device_param->cuda_function_aux3          = NULL;
       device_param->cuda_function_aux4          = NULL;
+
+      if (cuda_context_pushed == true)
+      {
+        hc_cuCtxPopCurrent (hashcat_ctx, &device_param->cuda_context);
+      }
 
       //if (device_param->cuda_context)         hc_cuCtxDestroy (hashcat_ctx, device_param->cuda_context);
       //device_param->cuda_context              = NULL;
