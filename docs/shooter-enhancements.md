@@ -293,6 +293,12 @@ from 26.235 seconds with the pre-change binary to a seven-run median of 0.140
 seconds. See [startup optimization](startup-optimization.md#large-rule-file-parsing)
 for controls, memory behavior, and verification details.
 
+The CPU rule interpreter also treats candidates as length-bounded byte arrays
+rather than NUL-terminated strings. This fixes literal rejection tests after an
+embedded `0x00`. Its memory register now starts empty until the `M` operation
+is used, and redundant buffer initialization was removed from the wordlist
+transform path.
+
 ## Optional status detail
 
 ### 39. Optional Restore.Sub status lines
@@ -703,3 +709,33 @@ finish, preventing lost work after interruption. Backward requests and
 nonseekable stdin or ordered `--stdout` sessions are refused without changing
 the attack. See [Live forward seek](live-goto.md) for position semantics,
 examples, limitations, and mode-13 behavior.
+
+## Multi-algorithm cracking
+
+### 68. Multiple hash modes in one session
+
+`--multi-hash-modes=LIST` applies one candidate attack to a mixed hash input
+using two or more numeric Hashcat modes or mdxfind `eN` modes. Lists preserve
+their command-line order, accept comma-separated ranges, reject non-cracking
+`e426`, and remove exact duplicates.
+
+The general path executes each existing mode in order with its unchanged
+parser and kernel. A completed mode cannot end the session while later modes
+remain, including when every hash compatible with that mode came from the
+potfile. Restore files record the current mode position.
+
+Twenty-three compatible raw, UTF-16LE, and common unsalted digest-chain
+families automatically use a shared pure GPU kernel. It evaluates every
+selected formula for each generated candidate in one candidate pass, including
+ordinary wordlist rules and mask generation. Numeric and equivalent mdxfind
+spellings are supported. Any other available modes can be included in the same
+command and retain the ordered general path, so salted formats, slow KDFs, and
+schema-specific hashes keep their correct parsers and resource models.
+
+Text and JSON outfile records identify the mode that produced each result.
+Potfile records carry the same private mode tag, preventing equal-looking raw
+formats such as MD5, MD4, and NTLM from claiming one another's results.
+`--show` and `--left` understand those tags and continue to report modes in
+the requested order. See [Multiple hash modes](multi-hash-modes.md) for the
+syntax, supported shared family, output format, restore behavior, limitations,
+and test commands.

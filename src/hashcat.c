@@ -8,6 +8,7 @@
 // basic tools
 
 #include "types.h"
+#include "mdxfind_modes.h"
 #include "folder.h"
 #include "memory.h"
 #include "shared.h"
@@ -845,6 +846,8 @@ static int inner1_loop (hashcat_ctx_t *hashcat_ctx)
 
 static int outer_loop (hashcat_ctx_t *hashcat_ctx, const int iteration)
 {
+  int outer_rc = 0;
+
   hashconfig_t         *hashconfig          = hashcat_ctx->hashconfig;
   hashes_t             *hashes              = hashcat_ctx->hashes;
   mask_ctx_t           *mask_ctx            = hashcat_ctx->mask_ctx;
@@ -963,6 +966,19 @@ static int outer_loop (hashcat_ctx_t *hashcat_ctx, const int iteration)
       }
       else
       {
+        if (user_options->multi_hash_modes_chgd == true)
+        {
+          char hash_mode_buf[16];
+
+          hash_mode_to_string (user_options->hash_mode, hash_mode_buf, sizeof (hash_mode_buf));
+
+          event_log_warning (hashcat_ctx, "Multi-hash mode %s skipped: no compatible hashes were loaded.", hash_mode_buf);
+
+          outer_rc = 1;
+
+          goto outer_loop_finalize_contexts;
+        }
+
         event_log_error (hashcat_ctx, "No hashes loaded.");
       }
 
@@ -1027,7 +1043,7 @@ static int outer_loop (hashcat_ctx_t *hashcat_ctx, const int iteration)
 
     outfile_write_close (hashcat_ctx);
 
-    return 0;
+    goto outer_loop_finalize_contexts;
   }
 
   if (user_options->left == true)
@@ -1040,7 +1056,7 @@ static int outer_loop (hashcat_ctx_t *hashcat_ctx, const int iteration)
 
     outfile_write_close (hashcat_ctx);
 
-    return 0;
+    goto outer_loop_finalize_contexts;
   }
 
   /**
@@ -1090,7 +1106,7 @@ static int outer_loop (hashcat_ctx_t *hashcat_ctx, const int iteration)
 
     EVENT (EVENT_POTFILE_ALL_CRACKED);
 
-    return 0;
+    goto outer_loop_finalize_contexts;
   }
 
   /**
@@ -1523,6 +1539,8 @@ static int outer_loop (hashcat_ctx_t *hashcat_ctx, const int iteration)
     event_log_info (hashcat_ctx, "GPU resources released. Finalizing restore and session files...");
   }
 
+outer_loop_finalize_contexts:
+
   // clean up
 
   #ifdef WITH_BRAIN
@@ -1541,7 +1559,7 @@ static int outer_loop (hashcat_ctx_t *hashcat_ctx, const int iteration)
   generic_ctx_destroy     (hashcat_ctx);
   straight_ctx_destroy    (hashcat_ctx);
 
-  return 0;
+  return outer_rc;
 }
 
 static void event_stub (MAYBE_UNUSED const u32 id, MAYBE_UNUSED hashcat_ctx_t *hashcat_ctx, MAYBE_UNUSED const void *buf, MAYBE_UNUSED const size_t len)
@@ -2347,9 +2365,125 @@ int hashcat_session_execute (hashcat_ctx_t *hashcat_ctx)
 
     if (user_options->speed_only == true) user_options->quiet = true;
 
-    rc_final = outer_loop (hashcat_ctx, 0);
+    if ((user_options->multi_hash_modes_chgd == true) && (user_options->multi_hash_modes_shared == true))
+    {
+      user_options->hash_mode = SHOOTER_MULTI_HASH_SHARED_MODE;
+      user_options->multi_hash_modes_pos = 0;
 
-    if (rc_final == -1) myabort (hashcat_ctx);
+      event_log_info (hashcat_ctx, "Multi-hash shared GPU session: %u compatible modes in one candidate pass.", user_options->multi_hash_modes_cnt);
+      event_log_info (hashcat_ctx, "Shared families: raw MD4/MD5/SHA-1/SHA-2/NTLM, UTF-16LE variants, and common unsalted digest chains.");
+      event_log_info (hashcat_ctx, "Results retain the requested mode tag.");
+      event_log_info (hashcat_ctx, NULL);
+
+      rc_final = outer_loop (hashcat_ctx, 0);
+
+      if (rc_final == -1) myabort (hashcat_ctx);
+    }
+    else if (user_options->multi_hash_modes_chgd == true)
+    {
+      rc_final = 0;
+
+      const u32 first_mode_pos = user_options->multi_hash_modes_pos;
+
+      bool any_cracked   = false;
+      bool any_exhausted = false;
+      bool any_executed  = false;
+
+      int iteration = 0;
+
+      event_log_info (hashcat_ctx, "Multi-hash session: %u modes, processed in command-line order.", user_options->multi_hash_modes_cnt);
+      event_log_info (hashcat_ctx, "Outfile rows and potfile entries are tagged with their hash mode.");
+      event_log_info (hashcat_ctx, NULL);
+
+      for (u32 mode_pos = first_mode_pos; mode_pos < user_options->multi_hash_modes_cnt; mode_pos++)
+      {
+        user_options->multi_hash_modes_pos = mode_pos;
+        user_options->hash_mode = user_options->multi_hash_modes_buf[mode_pos];
+
+        char hash_mode_buf[16];
+
+        hash_mode_to_string (user_options->hash_mode, hash_mode_buf, sizeof (hash_mode_buf));
+
+        event_log_info (hashcat_ctx, "Multi-hash mode %u/%u: %s", mode_pos + 1, user_options->multi_hash_modes_cnt, hash_mode_buf);
+        event_log_info (hashcat_ctx, NULL);
+
+        if (iteration > 0)
+        {
+          EVENT (EVENT_BRIDGES_INIT_PRE);
+
+          if (bridges_init (hashcat_ctx) == false)
+          {
+            event_log_error (hashcat_ctx, "Bridge initialization for multi-hash mode '%s' failed.", hash_mode_buf);
+
+            rc_final = -1;
+
+            myabort (hashcat_ctx);
+
+            break;
+          }
+
+          EVENT (EVENT_BRIDGES_INIT_POST);
+        }
+
+        const int mode_rc = outer_loop (hashcat_ctx, iteration++);
+
+        if (mode_rc == -1)
+        {
+          rc_final = -1;
+
+          myabort (hashcat_ctx);
+
+          break;
+        }
+
+        if (mode_rc == 0)
+        {
+          any_executed = true;
+
+          if (status_ctx->devices_status == STATUS_CRACKED)   any_cracked   = true;
+          if (status_ctx->devices_status == STATUS_EXHAUSTED) any_exhausted = true;
+        }
+
+        if ((status_ctx->devices_status == STATUS_ABORTED)
+         || (status_ctx->devices_status == STATUS_ABORTED_FINISH)
+         || (status_ctx->devices_status == STATUS_ABORTED_RUNTIME)
+         || (status_ctx->devices_status == STATUS_ABORTED_CHECKPOINT)
+         || (status_ctx->devices_status == STATUS_QUIT)
+         || (status_ctx->devices_status == STATUS_ERROR)) break;
+
+        // Cracked and exhausted normally end hashcat's outermost loop.  In a
+        // multi-mode session they only complete the current parser/kernel;
+        // later requested modes still need to receive the same candidates.
+
+        if ((mode_pos + 1 < user_options->multi_hash_modes_cnt)
+         && ((mode_rc == 1)
+          || (status_ctx->devices_status == STATUS_CRACKED)
+          || (status_ctx->devices_status == STATUS_EXHAUSTED)
+          || (status_ctx->devices_status == STATUS_BYPASS)
+          || (user_options->show == true)
+          || (user_options->left == true)))
+        {
+          status_ctx->run_main_level1 = true;
+        }
+
+        if (status_ctx->run_main_level1 == false) break;
+      }
+
+      if (rc_final != -1)
+      {
+        rc_final = 0;
+
+        if (any_executed == false)     status_ctx->devices_status = STATUS_EXHAUSTED;
+        else if (any_exhausted == true) status_ctx->devices_status = STATUS_EXHAUSTED;
+        else if (any_cracked == true)   status_ctx->devices_status = STATUS_CRACKED;
+      }
+    }
+    else
+    {
+      rc_final = outer_loop (hashcat_ctx, 0);
+
+      if (rc_final == -1) myabort (hashcat_ctx);
+    }
 
     if (user_options->speed_only == true) user_options->quiet = quiet_sav;
   }

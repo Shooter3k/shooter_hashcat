@@ -24,7 +24,7 @@
 // failure it would let through is silent.
 
 #define RESTORE_VERSION_MIN 720
-#define RESTORE_VERSION_CUR 722
+#define RESTORE_VERSION_CUR 723
 
 #define RESTORE_DATA_STDOUT_FILE (1U << 0)
 #define RESTORE_DATA_ATTACK13_AMPLIFIED (1U << 1)

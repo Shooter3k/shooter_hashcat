@@ -999,9 +999,9 @@ static bool reject_contain_class (char arr[RP_PASSWORD_SIZE], int arr_len, char 
   return false;
 }
 
-static bool reject_contain (char arr[RP_PASSWORD_SIZE], char c, int *pos_mem)
+static bool reject_contain (char arr[RP_PASSWORD_SIZE], const int arr_len, char c, int *pos_mem)
 {
-  const char *match = strchr (arr, c);
+  const char *match = (const char *) memchr (arr, c, (size_t) arr_len);
   if (match == NULL) return false;
 
   *pos_mem = (int)(match - arr);
@@ -1148,9 +1148,7 @@ int _old_apply_rule (const char *rule, int rule_len, char in[RP_PASSWORD_SIZE], 
   if (rule_len < 1) return (RULE_RC_REJECT_ERROR);
 
   int out_len = in_len;
-  int mem_len = in_len;
-
-  memset (mem, 0, sizeof (mem));
+  int mem_len = 0;
 
   memcpy (out, in, out_len);
 
@@ -1557,12 +1555,12 @@ int _old_apply_rule (const char *rule, int rule_len, char in[RP_PASSWORD_SIZE], 
 
       case RULE_OP_REJECT_CONTAIN:
         NEXT_RULEPOS (rule_pos);
-        if (reject_contain (out, rule_new[rule_pos], &pos_mem)) HCFREE_AND_RETURN (RULE_RC_REJECT_ERROR);
+        if (reject_contain (out, out_len, rule_new[rule_pos], &pos_mem)) HCFREE_AND_RETURN (RULE_RC_REJECT_ERROR);
         break;
 
       case RULE_OP_REJECT_NOT_CONTAIN:
         NEXT_RULEPOS (rule_pos);
-        if (!reject_contain (out, rule_new[rule_pos], &pos_mem)) HCFREE_AND_RETURN (RULE_RC_REJECT_ERROR);
+        if (!reject_contain (out, out_len, rule_new[rule_pos], &pos_mem)) HCFREE_AND_RETURN (RULE_RC_REJECT_ERROR);
         break;
 
       case RULE_OP_REJECT_EQUAL_FIRST:
@@ -1687,7 +1685,7 @@ int _old_apply_rule (const char *rule, int rule_len, char in[RP_PASSWORD_SIZE], 
             switch (rule_new[rule_pos])
             {
               case '?':
-                if (reject_contain (out, rule_new[rule_pos], &pos_mem)) HCFREE_AND_RETURN (RULE_RC_REJECT_ERROR);
+                if (reject_contain (out, out_len, rule_new[rule_pos], &pos_mem)) HCFREE_AND_RETURN (RULE_RC_REJECT_ERROR);
                 break;
 
               case 'l':
@@ -1713,7 +1711,7 @@ int _old_apply_rule (const char *rule, int rule_len, char in[RP_PASSWORD_SIZE], 
             switch (rule_new[rule_pos])
             {
               case '?':
-                if (!reject_contain (out, rule_new[rule_pos], &pos_mem)) HCFREE_AND_RETURN (RULE_RC_REJECT_ERROR);
+                if (!reject_contain (out, out_len, rule_new[rule_pos], &pos_mem)) HCFREE_AND_RETURN (RULE_RC_REJECT_ERROR);
                 break;
 
               case 'l':

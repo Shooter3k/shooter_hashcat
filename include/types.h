@@ -807,8 +807,8 @@ typedef enum user_options_defaults
   BENCHMARK_MAX            = 99999,
   BENCHMARK_MIN            = 0,
   BENCHMARK                = false,
-  BITMAP_MAX               = 18,
-  BITMAP_MIN               = 16,
+  BITMAP_MAX               = 24,
+  BITMAP_MIN               = 10,
   #ifdef WITH_BRAIN
   BRAIN_CLIENT             = false,
   BRAIN_CLIENT_FEATURES    = 3,
@@ -1044,6 +1044,7 @@ typedef enum user_options_map
   IDX_STAGE_PROFILE             = 0xff64,
   IDX_STAGE_PROFILE_JSON        = 0xff65,
   IDX_TASK_TIME_BREAKDOWN       = 0xff66,
+  IDX_MULTI_HASH_MODES          = 0xff8e,
   IDX_CANDIDATE_MIN_UPPER       = 0xff86,
   IDX_CANDIDATE_MIN_LOWER       = 0xff87,
   IDX_CANDIDATE_MIN_DIGIT       = 0xff88,
@@ -1422,6 +1423,7 @@ typedef struct hc_device_param
   u32     device_processors;
   u64     device_maxmem_alloc;
   u64     device_global_mem;
+  u64     device_cache_size;                 // last level cache the device reports, 0 if it reports none
   u64     device_available_mem;
   int     device_host_unified_memory;
   u32     device_maxclock_frequency;
@@ -2556,6 +2558,10 @@ typedef struct restore_data
   u32  stdout_flags;
   u64  attack13_amplifier;
 
+  // Version 723 records which entry in --multi-hash-modes owns words_cur.
+
+  u32  multi_hash_modes_pos;
+
 } restore_data_t;
 
 typedef struct pidfile_data
@@ -2680,6 +2686,8 @@ typedef struct user_options
   bool         bypass_delay_chgd;
   bool         bypass_threshold_chgd;
   bool         hash_mode_chgd;
+  bool         multi_hash_modes_chgd;
+  bool         multi_hash_modes_shared;
   bool         hccapx_message_pair_chgd;
   bool         identify;
   bool         increment_max_chgd;
@@ -2777,6 +2785,7 @@ typedef struct user_options
   char        *induction_dir;
   char        *keyboard_layout_mapping;
   char        *markov_hcstat2;
+  char        *multi_hash_modes;
   char        *backend_devices;
   char        *opencl_device_types;
   char        *outfile;
@@ -2841,6 +2850,10 @@ typedef struct user_options
   u32          hwmon_temp_abort;
   u32          hash_info;
   int          hash_mode;
+  int          multi_hash_mode_output;
+  int         *multi_hash_modes_buf;
+  u32          multi_hash_modes_cnt;
+  u32          multi_hash_modes_pos;
   u32          hccapx_message_pair;
   u32          hook_threads;
   u32          increment_max;

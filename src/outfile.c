@@ -727,6 +727,19 @@ int outfile_write (hashcat_ctx_t *hashcat_ctx, const char *out_buf, const int ou
   {
     tmp_buf[0] = '{'; tmp_len += 1;
 
+    if (user_options->multi_hash_modes_chgd == true)
+    {
+      char mode_buf[16];
+
+      const int output_mode = (user_options->multi_hash_mode_output >= 0)
+                            ? user_options->multi_hash_mode_output
+                            : user_options->hash_mode;
+
+      hash_mode_to_string (output_mode, mode_buf, sizeof (mode_buf));
+
+      tmp_len += snprintf (tmp_buf + tmp_len, HCBUFSIZ_LARGE - tmp_len, "\"hash_mode\": \"%s\", ", mode_buf);
+    }
+
     if (user_len > 0)
     {
       if (username != NULL)
@@ -789,6 +802,19 @@ int outfile_write (hashcat_ctx_t *hashcat_ctx, const char *out_buf, const int ou
   else
   {
     const u32 outfile_format = (hashconfig->opts_type & OPTS_TYPE_PT_ALWAYS_HEXIFY) ? 5 : outfile_ctx->outfile_format;
+
+    if (user_options->multi_hash_modes_chgd == true)
+    {
+      char mode_buf[16];
+
+      const int output_mode = (user_options->multi_hash_mode_output >= 0)
+                            ? user_options->multi_hash_mode_output
+                            : user_options->hash_mode;
+
+      hash_mode_to_string (output_mode, mode_buf, sizeof (mode_buf));
+
+      tmp_len += snprintf (tmp_buf + tmp_len, HCBUFSIZ_LARGE - tmp_len, "%s%c", mode_buf, hashconfig->separator);
+    }
 
     if (user_len > 0)
     {

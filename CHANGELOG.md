@@ -1,5 +1,32 @@
 # shooter_hashcat release notes
 
+## v7.1.2-shooter.20260906.61
+
+Mixed-mode cracking and candidate-rule correctness.
+
+### Added
+
+- Add `--multi-hash-modes=LIST` for applying one candidate attack to multiple
+  numeric Hashcat modes or mdxfind `eN` modes in command-line order.
+- Automatically combine 23 compatible raw, UTF-16LE, and common unsalted
+  digest-chain families into one GPU candidate pass. Other available modes use
+  the ordered sequential path with their existing parsers and kernels.
+- Tag multi-mode outfile and potfile records with their producing mode, and
+  preserve the active mode in restore files so equal-looking raw formats
+  cannot claim one another's results.
+
+### Fixed
+
+- Bound CPU-rule literal rejection by the candidate length so candidates with
+  embedded NUL bytes are interpreted correctly. Initialize rule memory only
+  when requested and remove duplicate candidate-output clearing.
+
+### Verified
+
+- Exercise native and mdxfind mode parsing, mixed-mode order, mode-isolated
+  potfiles, tagged text/JSON output, straight rules, masks, restore behavior,
+  the 23-mode shared GPU family, and ordered fallback to existing kernels.
+
 ## v7.1.2-shooter.20260902.60
 
 ### Fixed

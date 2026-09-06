@@ -5,6 +5,7 @@
 
 #include "common.h"
 #include "types.h"
+#include "mdxfind_modes.h"
 #include <stddef.h>
 #include "memory.h"
 #include "event.h"
@@ -100,8 +101,10 @@ static int read_restore (hashcat_ctx_t *hashcat_ctx)
 
   memset (rd, 0, sizeof (restore_data_t));
 
-  const size_t restore_data_size = (restore_version >= 722)
+  const size_t restore_data_size = (restore_version >= 723)
                                  ? sizeof (restore_data_t)
+                                 : (restore_version >= 722)
+                                 ? offsetof (restore_data_t, multi_hash_modes_pos)
                                  : (restore_version >= 721)
                                  ? offsetof (restore_data_t, attack13_amplifier)
                                  : offsetof (restore_data_t, stdout_output_size);
@@ -248,6 +251,7 @@ static int write_restore (hashcat_ctx_t *hashcat_ctx)
 
   rd->masks_pos = mask_ctx->masks_pos;
   rd->dicts_pos = straight_ctx->dicts_pos;
+  rd->multi_hash_modes_pos = hashcat_ctx->user_options->multi_hash_modes_pos;
 
   if (hashcat_ctx->user_options->stdout_flag == true)
   {
@@ -308,6 +312,7 @@ static int write_restore (hashcat_ctx_t *hashcat_ctx)
   rd->stdout_output_size = 0;
   rd->stdout_flags = 0;
   rd->attack13_amplifier = 0;
+  rd->multi_hash_modes_pos = 0;
 
   return 0;
 }
@@ -596,9 +601,28 @@ int restore_ctx_init (hashcat_ctx_t *hashcat_ctx, int argc, char **argv)
       return -1;
     }
 
+    hcfree (user_options->multi_hash_modes_buf);
+
     user_options_init (hashcat_ctx);
 
     if (user_options_getopt (hashcat_ctx, rd->argc, rd->argv) == -1) return -1;
+    if (user_options_sanity (hashcat_ctx) == -1) return -1;
+
+    if ((user_options->multi_hash_modes_chgd == true) && (rd->multi_hash_modes_pos >= user_options->multi_hash_modes_cnt))
+    {
+      event_log_error (hashcat_ctx, "Restore file refers to --multi-hash-modes entry %u, but the restored command only has %u entries.", rd->multi_hash_modes_pos + 1, user_options->multi_hash_modes_cnt);
+
+      return -1;
+    }
+
+    user_options->multi_hash_modes_pos = rd->multi_hash_modes_pos;
+
+    if (user_options->multi_hash_modes_chgd == true)
+    {
+      user_options->hash_mode = (user_options->multi_hash_modes_shared == true)
+                            ? SHOOTER_MULTI_HASH_SHARED_MODE
+                            : user_options->multi_hash_modes_buf[user_options->multi_hash_modes_pos];
+    }
 
     restore_ctx->restore_execute = true;
   }

@@ -1,5 +1,7 @@
 * changes v7.1.2 -> v7.1.x
 
+- Rules: Bound literal-character rejection by the candidate length so embedded NUL bytes are handled correctly, and avoid initializing unused CPU rule memory and duplicate output-buffer clearing
+- Multi-hash: Add `--multi-hash-modes=LIST` with ordered sequential execution for every available numeric or mdxfind e-mode, mode-tagged output/potfile isolation, restore support, and an automatic one-pass GPU implementation for 23 compatible raw, UTF-16LE, and common unsalted digest-chain families
 - Distribution: Remove the standalone `shooterctl` companion, its source, and its package/build requirements from standard `shooter_hashcat`
 - Status: Always show Remaining and Recovered/Time in the normal status display, including for jobs with 1,000 or fewer digests
 - Status: Show live current and average minute recovery values during the first minute instead of reporting N/A

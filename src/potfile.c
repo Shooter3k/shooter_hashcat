@@ -334,6 +334,7 @@ void potfile_write_batch_stop (hashcat_ctx_t *hashcat_ctx)
 void potfile_write_append (hashcat_ctx_t *hashcat_ctx, const char *out_buf, const int out_len, u8 *plain_ptr, unsigned int plain_len)
 {
   const hashconfig_t   *hashconfig   = hashcat_ctx->hashconfig;
+  const user_options_t *user_options = hashcat_ctx->user_options;
         potfile_ctx_t  *potfile_ctx  = hashcat_ctx->potfile_ctx;
 
   if (potfile_ctx->enabled == false) return;
@@ -343,6 +344,19 @@ void potfile_write_append (hashcat_ctx_t *hashcat_ctx, const char *out_buf, cons
   u8 *tmp_buf = potfile_ctx->tmp_buf;
 
   int tmp_len = 0;
+
+  if (user_options->multi_hash_modes_chgd == true)
+  {
+    char mode_buf[16];
+
+    const int output_mode = (user_options->multi_hash_mode_output >= 0)
+                          ? user_options->multi_hash_mode_output
+                          : user_options->hash_mode;
+
+    hash_mode_to_string (output_mode, mode_buf, sizeof (mode_buf));
+
+    tmp_len += snprintf ((char *) tmp_buf + tmp_len, HCBUFSIZ_LARGE - tmp_len, "$shooter-mode$%s$", mode_buf);
+  }
 
   if (true)
   {
@@ -617,6 +631,50 @@ int potfile_remove_parse (hashcat_ctx_t *hashcat_ctx)
     line_hash_buf[line_hash_len] = 0;
 
     if (line_hash_len == 0) continue;
+
+    if (hashcat_ctx->user_options->multi_hash_modes_chgd == true)
+    {
+      const user_options_t *user_options = hashcat_ctx->user_options;
+
+      int mode_prefix_len = 0;
+
+      if (user_options->multi_hash_modes_shared == true)
+      {
+        for (u32 mode_pos = 0; mode_pos < user_options->multi_hash_modes_cnt; mode_pos++)
+        {
+          char mode_buf[16];
+          char mode_prefix[48];
+
+          hash_mode_to_string (user_options->multi_hash_modes_buf[mode_pos], mode_buf, sizeof (mode_buf));
+
+          const int candidate_len = snprintf (mode_prefix, sizeof (mode_prefix), "$shooter-mode$%s$", mode_buf);
+
+          if ((line_hash_len > candidate_len) && (memcmp (line_hash_buf, mode_prefix, candidate_len) == 0))
+          {
+            mode_prefix_len = candidate_len;
+
+            break;
+          }
+        }
+
+        if (mode_prefix_len == 0) continue;
+      }
+      else
+      {
+        char mode_buf[16];
+        char mode_prefix[48];
+
+        hash_mode_to_string (user_options->hash_mode, mode_buf, sizeof (mode_buf));
+
+        mode_prefix_len = snprintf (mode_prefix, sizeof (mode_prefix), "$shooter-mode$%s$", mode_buf);
+
+        if (line_hash_len <= mode_prefix_len) continue;
+        if (memcmp (line_hash_buf, mode_prefix, mode_prefix_len) != 0) continue;
+      }
+
+      line_hash_buf += mode_prefix_len;
+      line_hash_len -= mode_prefix_len;
+    }
 
     if (hash_buf.salt)
     {

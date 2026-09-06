@@ -20,4 +20,10 @@
 #define MDXFIND_HASH_MODE_IS_NAMED(mode) \
   (((mode) >= MDXFIND_HASH_MODE_MIN) && ((mode) <= MDXFIND_HASH_MODE_MAX))
 
+// Private module used when --multi-hash-modes can evaluate a compatible raw
+// hash family in one GPU pass.  Keep it below MODULE_HASH_MODES_MAXIMUM and
+// outside both the public native modes and the mdxfind alias range.
+
+#define SHOOTER_MULTI_HASH_SHARED_MODE 79997
+
 #endif

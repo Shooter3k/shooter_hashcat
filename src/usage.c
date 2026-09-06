@@ -28,6 +28,7 @@ static const char *const USAGE_BIG_PRE_HASHMODES[] =
   " Options Short / Long           | Type | Description                                          | Example",
   "================================+======+======================================================+=======================",
   " -m, --hash-type                | Mode | Hash-type, references below (otherwise autodetect)   | -m 1000 or -m e987",
+  "     --multi-hash-modes         | List | Try each hash mode against one input, in listed order | --multi-hash-modes=0,100,e1-e5",
   " -a, --attack-mode              | Num  | Attack-mode, see references below                    | -a 3",
   " -V, --version                  |      | Print version                                        |",
   " -h, --help                     |      | Print help. Use -hh to show all supported hash-modes | -h or -hh",

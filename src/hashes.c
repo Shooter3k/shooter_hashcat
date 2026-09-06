@@ -1466,7 +1466,37 @@ int check_cracked (hashcat_ctx_t *hashcat_ctx, hc_device_param_t *device_param)
       write_batch_open = true;
     }
 
+    if (user_options->multi_hash_modes_shared == true)
+    {
+      const int output_mode = (cracked[i].extra1 == 0) ? -1 : (int) cracked[i].extra1 - 1;
+
+      bool requested = false;
+
+      for (u32 mode_pos = 0; mode_pos < user_options->multi_hash_modes_cnt; mode_pos++)
+      {
+        if (user_options->multi_hash_modes_buf[mode_pos] == output_mode)
+        {
+          requested = true;
+
+          break;
+        }
+      }
+
+      if (requested == false)
+      {
+        event_log_error (hashcat_ctx, "Shared multi-hash kernel returned an invalid result mode (%d).", output_mode);
+
+        rc = -1;
+
+        break;
+      }
+
+      user_options->multi_hash_mode_output = output_mode;
+    }
+
     rc = check_hash (hashcat_ctx, device_param, &cracked[i]);
+
+    user_options->multi_hash_mode_output = -1;
 
     if (rc == -1)
     {

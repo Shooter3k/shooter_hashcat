@@ -64,6 +64,238 @@ static bool mdxfind_hash_mode_parse (const char *value, int *hash_mode)
   return true;
 }
 
+#define MULTI_HASH_MODES_MAX 4096
+
+static bool single_hash_mode_parse (const char *value, int *hash_mode)
+{
+  int parsed = 0;
+
+  if (mdxfind_hash_mode_parse (value, &parsed) == false)
+  {
+    if (hc_string_is_digit (value) == false) return false;
+
+    const u64 native_mode = hc_strtoull (value, NULL, 10);
+
+    if (native_mode >= MODULE_HASH_MODES_MAXIMUM) return false;
+
+    parsed = (int) native_mode;
+  }
+
+  // mdxfind e426 is deliberately a counter/throughput evaluation mode.  It has no
+  // digest function and therefore cannot participate in a cracking mode list.
+
+  if (parsed == MDXFIND_HASH_MODE_FROM_ID (426)) return false;
+  if (parsed == SHOOTER_MULTI_HASH_SHARED_MODE) return false;
+
+  if (hash_mode != NULL) *hash_mode = parsed;
+
+  return true;
+}
+
+static bool multi_hash_modes_parse (const char *value, int **out_modes, u32 *out_cnt)
+{
+  if ((value == NULL) || (value[0] == 0)) return false;
+
+  const size_t value_len = strlen (value);
+
+  if ((value[0] == ',') || (value[value_len - 1] == ',') || (strstr (value, ",,") != NULL)) return false;
+
+  int *modes = (int *) hccalloc (MULTI_HASH_MODES_MAX, sizeof (int));
+  u32 modes_cnt = 0;
+
+  char *copy = hcstrdup (value);
+  char *saveptr = NULL;
+
+  for (char *item = strtok_r (copy, ",", &saveptr); item != NULL; item = strtok_r (NULL, ",", &saveptr))
+  {
+    if (item[0] == 0) goto fail;
+
+    char *dash = strchr (item, '-');
+
+    int first = 0;
+    int last  = 0;
+
+    if (dash == NULL)
+    {
+      if (single_hash_mode_parse (item, &first) == false) goto fail;
+
+      last = first;
+    }
+    else
+    {
+      if (strchr (dash + 1, '-') != NULL) goto fail;
+
+      *dash = 0;
+
+      const char *right = dash + 1;
+
+      if ((item[0] == 0) || (right[0] == 0)) goto fail;
+
+      const bool first_mdxfind = ((item[0] == 'e') || (item[0] == 'E'));
+      const bool last_mdxfind  = ((right[0] == 'e') || (right[0] == 'E'));
+
+      if (first_mdxfind != last_mdxfind) goto fail;
+
+      if (single_hash_mode_parse (item,  &first) == false) goto fail;
+      if (single_hash_mode_parse (right, &last)  == false) goto fail;
+
+      if (last < first) goto fail;
+    }
+
+    for (int mode = first; mode <= last; mode++)
+    {
+      if (mode == MDXFIND_HASH_MODE_FROM_ID (426)) goto fail;
+
+      bool duplicate = false;
+
+      for (u32 i = 0; i < modes_cnt; i++)
+      {
+        if (modes[i] == mode)
+        {
+          duplicate = true;
+
+          break;
+        }
+      }
+
+      if (duplicate == false)
+      {
+        if (modes_cnt == MULTI_HASH_MODES_MAX) goto fail;
+
+        modes[modes_cnt++] = mode;
+      }
+    }
+  }
+
+  hcfree (copy);
+
+  if (modes_cnt == 0)
+  {
+    hcfree (modes);
+
+    return false;
+  }
+
+  if (out_modes != NULL)
+  {
+    *out_modes = modes;
+  }
+  else
+  {
+    hcfree (modes);
+  }
+
+  if (out_cnt != NULL) *out_cnt = modes_cnt;
+
+  return true;
+
+fail:
+  hcfree (copy);
+  hcfree (modes);
+
+  return false;
+}
+
+enum multi_hash_shared_family
+{
+  MULTI_HASH_SHARED_MD5    = 1u << 0,
+  MULTI_HASH_SHARED_MD4    = 1u << 1,
+  MULTI_HASH_SHARED_SHA1   = 1u << 2,
+  MULTI_HASH_SHARED_SHA256 = 1u << 3,
+  MULTI_HASH_SHARED_SHA512 = 1u << 4,
+  MULTI_HASH_SHARED_NTLM   = 1u << 5,
+  MULTI_HASH_SHARED_MD5_UTF16LE    = 1u << 6,
+  MULTI_HASH_SHARED_SHA1_UTF16LE   = 1u << 7,
+  MULTI_HASH_SHARED_SHA256_UTF16LE = 1u << 8,
+  MULTI_HASH_SHARED_SHA512_UTF16LE = 1u << 9,
+  MULTI_HASH_SHARED_MD5_MD5        = 1u << 10,
+  MULTI_HASH_SHARED_MD5_MD5_MD5    = 1u << 11,
+  MULTI_HASH_SHARED_MD5_UC_MD5     = 1u << 12,
+  MULTI_HASH_SHARED_MD5_SHA1       = 1u << 13,
+  MULTI_HASH_SHARED_SHA1_SHA1      = 1u << 14,
+  MULTI_HASH_SHARED_SHA1_MD5       = 1u << 15,
+  MULTI_HASH_SHARED_SHA1_MD5_MD5   = 1u << 17,
+  MULTI_HASH_SHARED_SHA256_MD5     = 1u << 18,
+  MULTI_HASH_SHARED_MD5_SHA1_MIX   = 1u << 19,
+  MULTI_HASH_SHARED_SHA512_RAW2    = 1u << 20,
+  MULTI_HASH_SHARED_SHA256_RAW2    = 1u << 21,
+  MULTI_HASH_SHARED_MD5_SHA1_MD5   = 1u << 22,
+  MULTI_HASH_SHARED_SHA224_SHA1    = 1u << 23
+};
+
+static u32 multi_hash_shared_family_for_mode (const int mode)
+{
+  switch (mode)
+  {
+    case 0:                               return MULTI_HASH_SHARED_MD5;
+    case 900:                             return MULTI_HASH_SHARED_MD4;
+    case 100:                             return MULTI_HASH_SHARED_SHA1;
+    case 1400:                            return MULTI_HASH_SHARED_SHA256;
+    case 1700:                            return MULTI_HASH_SHARED_SHA512;
+    case 1000:                            return MULTI_HASH_SHARED_NTLM;
+    case MDXFIND_HASH_MODE_FROM_ID (1):   return MULTI_HASH_SHARED_MD5;
+    case MDXFIND_HASH_MODE_FROM_ID (3):   return MULTI_HASH_SHARED_MD4;
+    case MDXFIND_HASH_MODE_FROM_ID (8):   return MULTI_HASH_SHARED_SHA1;
+    case MDXFIND_HASH_MODE_FROM_ID (10):  return MULTI_HASH_SHARED_SHA256;
+    case MDXFIND_HASH_MODE_FROM_ID (12):  return MULTI_HASH_SHARED_SHA512;
+    case MDXFIND_HASH_MODE_FROM_ID (369): return MULTI_HASH_SHARED_NTLM;
+    case 70:
+    case MDXFIND_HASH_MODE_FROM_ID (800): return MULTI_HASH_SHARED_MD5_UTF16LE;
+    case 170:
+    case MDXFIND_HASH_MODE_FROM_ID (727): return MULTI_HASH_SHARED_SHA1_UTF16LE;
+    case 1470:
+    case MDXFIND_HASH_MODE_FROM_ID (805): return MULTI_HASH_SHARED_SHA256_UTF16LE;
+    case 1770:
+    case MDXFIND_HASH_MODE_FROM_ID (808): return MULTI_HASH_SHARED_SHA512_UTF16LE;
+    case 2600:                            return MULTI_HASH_SHARED_MD5_MD5;
+    case 3500:                            return MULTI_HASH_SHARED_MD5_MD5_MD5;
+    case 4300:
+    case MDXFIND_HASH_MODE_FROM_ID (262): return MULTI_HASH_SHARED_MD5_UC_MD5;
+    case 4400:
+    case MDXFIND_HASH_MODE_FROM_ID (178): return MULTI_HASH_SHARED_MD5_SHA1;
+    case 4500:                            return MULTI_HASH_SHARED_SHA1_SHA1;
+    case 4700:
+    case MDXFIND_HASH_MODE_FROM_ID (160): return MULTI_HASH_SHARED_SHA1_MD5;
+    case 18500:
+    case MDXFIND_HASH_MODE_FROM_ID (287): return MULTI_HASH_SHARED_SHA1_MD5_MD5;
+    case 20800:
+    case MDXFIND_HASH_MODE_FROM_ID (164): return MULTI_HASH_SHARED_SHA256_MD5;
+    case 20900:
+    case MDXFIND_HASH_MODE_FROM_ID (442): return MULTI_HASH_SHARED_MD5_SHA1_MIX;
+    case 21000:
+    case MDXFIND_HASH_MODE_FROM_ID (38):  return MULTI_HASH_SHARED_SHA512_RAW2;
+    case 21400:
+    case MDXFIND_HASH_MODE_FROM_ID (36):  return MULTI_HASH_SHARED_SHA256_RAW2;
+    case 32800:
+    case MDXFIND_HASH_MODE_FROM_ID (188): return MULTI_HASH_SHARED_MD5_SHA1_MD5;
+    case 34500:
+    case MDXFIND_HASH_MODE_FROM_ID (766): return MULTI_HASH_SHARED_SHA224_SHA1;
+  }
+
+  return 0;
+}
+
+static bool multi_hash_modes_shared_eligible (const user_options_t *user_options)
+{
+  u32 families = 0;
+
+  for (u32 i = 0; i < user_options->multi_hash_modes_cnt; i++)
+  {
+    const u32 family = multi_hash_shared_family_for_mode (user_options->multi_hash_modes_buf[i]);
+
+    if (family == 0) return false;
+
+    // Native and mdxfind spellings of one digest are equivalent.  Do not fuse
+    // an ambiguous duplicate; ordered Option 1 semantics remain exact.
+
+    if (families & family) return false;
+
+    families |= family;
+  }
+
+  return true;
+}
+
 static bool attack_mode_uses_whole_candidate_rules (const u32 attack_mode)
 {
   if (attack_mode == ATTACK_MODE_COMBI)   return true;
@@ -167,6 +399,7 @@ static const struct option long_options[] =
   {"hash-copy",                 no_argument,       NULL, IDX_HASH_COPY},
   {"hash-info",                 no_argument,       NULL, IDX_HASH_INFO},
   {"hash-type",                 required_argument, NULL, IDX_HASH_MODE},
+  {"multi-hash-modes",          required_argument, NULL, IDX_MULTI_HASH_MODES},
   {"hccapx-message-pair",       required_argument, NULL, IDX_HCCAPX_MESSAGE_PAIR},
   {"help",                      no_argument,       NULL, IDX_HELP},
   {"hex-charset",               no_argument,       NULL, IDX_HEX_CHARSET},
@@ -339,6 +572,12 @@ int user_options_init (hashcat_ctx_t *hashcat_ctx)
   user_options->hwmon_temp_abort          = HWMON_TEMP_ABORT;
   user_options->hash_info                 = HASH_INFO;
   user_options->hash_mode                 = HASH_MODE;
+  user_options->multi_hash_mode_output    = -1;
+  user_options->multi_hash_modes          = NULL;
+  user_options->multi_hash_modes_buf      = NULL;
+  user_options->multi_hash_modes_cnt      = 0;
+  user_options->multi_hash_modes_pos      = 0;
+  user_options->multi_hash_modes_shared   = false;
   user_options->hccapx_message_pair       = HCCAPX_MESSAGE_PAIR;
   user_options->hex_charset               = HEX_CHARSET;
   user_options->hex_salt                  = HEX_SALT;
@@ -443,6 +682,7 @@ void user_options_destroy (hashcat_ctx_t *hashcat_ctx)
 
   hcfree (user_options->rp_files);
   hcfree (user_options->rp_files_pos);
+  hcfree (user_options->multi_hash_modes_buf);
 
   hcfree (user_options->hc_argv_pos);
   hcfree (user_options->hc_argv_original);
@@ -557,6 +797,17 @@ int user_options_getopt (hashcat_ctx_t *hashcat_ctx, int argc, char **argv)
 
       break;
 
+      case IDX_MULTI_HASH_MODES:
+
+      if (multi_hash_modes_parse (optarg, NULL, NULL) == false)
+      {
+        event_log_error (hashcat_ctx, "Invalid --multi-hash-modes list '%s'. Use comma-separated modes or ranges (for example 0,100,e1-e10); e426 is not a cracking mode.", optarg);
+
+        return -1;
+      }
+
+      break;
+
       case '?':
       {
         const char *invalid_argument = ((optind > 0) && (optind <= argc)) ? argv[optind - 1] : NULL;
@@ -651,6 +902,18 @@ int user_options_getopt (hashcat_ctx_t *hashcat_ctx, int argc, char **argv)
                                             user_options->hash_mode = hc_strtoul (optarg, NULL, 10);
                                           }
                                           user_options->hash_mode_chgd            = true;                            break;
+      case IDX_MULTI_HASH_MODES:           hcfree (user_options->multi_hash_modes_buf);
+                                          user_options->multi_hash_modes_buf      = NULL;
+                                          user_options->multi_hash_modes_cnt      = 0;
+                                          if (multi_hash_modes_parse (optarg, &user_options->multi_hash_modes_buf, &user_options->multi_hash_modes_cnt) == false)
+                                          {
+                                            event_log_error (hashcat_ctx, "Invalid --multi-hash-modes list '%s'.", optarg);
+                                            return -1;
+                                          }
+                                          user_options->multi_hash_modes          = optarg;
+                                          user_options->multi_hash_modes_pos      = 0;
+                                          user_options->multi_hash_modes_chgd     = true;
+                                          user_options->hash_mode                 = user_options->multi_hash_modes_buf[0]; break;
       case IDX_RUNTIME:                   user_options->runtime                   = hc_strtoul (optarg, NULL, 10);
                                           user_options->runtime_chgd              = true;                            break;
       case IDX_METAL_COMPILER_RUNTIME:    user_options->metal_compiler_runtime    = hc_strtoul (optarg, NULL, 10);
@@ -832,6 +1095,72 @@ int user_options_getopt (hashcat_ctx_t *hashcat_ctx, int argc, char **argv)
 int user_options_sanity (hashcat_ctx_t *hashcat_ctx)
 {
   user_options_t *user_options = hashcat_ctx->user_options;
+
+  if ((user_options->multi_hash_modes_chgd == false) && (user_options->hash_mode == SHOOTER_MULTI_HASH_SHARED_MODE))
+  {
+    event_log_error (hashcat_ctx, "Hash mode %d is internal; use --multi-hash-modes instead.", SHOOTER_MULTI_HASH_SHARED_MODE);
+
+    return -1;
+  }
+
+  if (user_options->multi_hash_modes_chgd == true)
+  {
+    if (user_options->hash_mode_chgd == true)
+    {
+      event_log_error (hashcat_ctx, "Use either -m/--hash-type or --multi-hash-modes, not both.");
+
+      return -1;
+    }
+
+    if (user_options->multi_hash_modes_cnt < 2)
+    {
+      event_log_error (hashcat_ctx, "--multi-hash-modes requires at least two distinct hash modes.");
+
+      return -1;
+    }
+
+    if ((user_options->benchmark == true) || (user_options->benchmark_all == true))
+    {
+      event_log_error (hashcat_ctx, "--multi-hash-modes is not supported with benchmark mode.");
+
+      return -1;
+    }
+
+    if ((user_options->identify == true) || (user_options->backend_info > 0) || (user_options->hash_info > 0))
+    {
+      event_log_error (hashcat_ctx, "--multi-hash-modes is only supported for cracking, --show, and --left sessions.");
+
+      return -1;
+    }
+
+    if ((user_options->stdout_flag == true) || (user_options->keyspace == true) || (user_options->total_candidates == true))
+    {
+      event_log_error (hashcat_ctx, "--multi-hash-modes requires a hash input and cannot be used with --stdout or keyspace-only modes.");
+
+      return -1;
+    }
+
+    if (user_options->remove == true)
+    {
+      event_log_error (hashcat_ctx, "--remove is not supported with --multi-hash-modes because one mode must not remove input needed by a later mode.");
+
+      return -1;
+    }
+
+    user_options->multi_hash_modes_shared = false;
+
+    if ((user_options->show == false)
+     && (user_options->left == false)
+     && (multi_hash_modes_shared_eligible (user_options) == true))
+    {
+      user_options->multi_hash_modes_shared = true;
+      user_options->hash_mode = SHOOTER_MULTI_HASH_SHARED_MODE;
+    }
+    else
+    {
+      user_options->hash_mode = user_options->multi_hash_modes_buf[user_options->multi_hash_modes_pos];
+    }
+  }
 
   if (candidate_policy_active (user_options) == true)
   {
@@ -1418,9 +1747,9 @@ int user_options_sanity (hashcat_ctx_t *hashcat_ctx)
     return -1;
   }
 
-  if (user_options->bitmap_max > 31)
+  if (user_options->bitmap_max > 28)
   {
-    event_log_error (hashcat_ctx, "Invalid --bitmap-max value specified - must be lower than 32.");
+    event_log_error (hashcat_ctx, "Invalid --bitmap-max value specified - must not be higher than 28.");
 
     return -1;
   }
@@ -2978,7 +3307,7 @@ void user_options_preprocess (hashcat_ctx_t *hashcat_ctx)
 
   if (user_options->stdout_flag == false && user_options->benchmark == false && user_options->keyspace == false)
   {
-    if (user_options->hash_mode == 0 && user_options->hash_mode_chgd == false)
+    if (user_options->hash_mode == 0 && user_options->hash_mode_chgd == false && user_options->multi_hash_modes_chgd == false)
     {
       user_options->autodetect = true;
     }
@@ -4461,13 +4790,50 @@ int user_options_check_files (hashcat_ctx_t *hashcat_ctx)
 
   user_options->quiet = true;
 
-  const int rc = hashconfig_init (hashcat_ctx);
+  if (user_options->multi_hash_modes_chgd == true)
+  {
+    const int hash_mode_save = user_options->hash_mode;
+
+    for (u32 i = 0; i < user_options->multi_hash_modes_cnt; i++)
+    {
+      user_options->hash_mode = user_options->multi_hash_modes_buf[i];
+
+      const int rc = hashconfig_init (hashcat_ctx);
+
+      hashconfig_destroy (hashcat_ctx);
+
+      if (rc == -1)
+      {
+        char hash_mode_buf[16];
+
+        hash_mode_to_string (user_options->hash_mode, hash_mode_buf, sizeof (hash_mode_buf));
+
+        user_options->hash_mode = hash_mode_save;
+        user_options->quiet = quiet_save;
+
+        event_log_error (hashcat_ctx, "Hash-mode '%s' in --multi-hash-modes is not available in this build.", hash_mode_buf);
+
+        return -1;
+      }
+    }
+
+    user_options->hash_mode = hash_mode_save;
+  }
+  else
+  {
+    const int rc = hashconfig_init (hashcat_ctx);
+
+    hashconfig_destroy (hashcat_ctx);
+
+    if (rc == -1)
+    {
+      user_options->quiet = quiet_save;
+
+      return -1;
+    }
+  }
 
   user_options->quiet = quiet_save;
-
-  if (rc == -1) return -1;
-
-  hashconfig_destroy (hashcat_ctx);
 
   // same check but for an backend kernel
 
