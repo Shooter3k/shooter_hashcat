@@ -14941,6 +14941,18 @@ void backend_session_context_reset (hashcat_ctx_t *hashcat_ctx)
     {
       hc_cuCtxDestroy (hashcat_ctx, device_param->cuda_context);
 
+      // Replacing a CUDA context invalidates every module and function handle
+      // that belonged to the destroyed context.  Clear the shared handles so
+      // a later session cannot borrow stale module state and report
+      // "named symbol not found" or "context is destroyed".  The replacement
+      // context will load a fresh shared module during session setup.
+      device_param->cuda_module_shared          = NULL;
+      device_param->cuda_function_memset        = NULL;
+      device_param->cuda_function_bzero         = NULL;
+      device_param->cuda_function_atinit        = NULL;
+      device_param->cuda_function_decompress    = NULL;
+      device_param->cuda_function_utf8toutf16le = NULL;
+
       if (hc_cuCtxCreate (hashcat_ctx, &device_param->cuda_context, CU_CTX_SCHED_BLOCKING_SYNC, device_param->cuda_device) == -1)
       {
         device_param->skipped = true;

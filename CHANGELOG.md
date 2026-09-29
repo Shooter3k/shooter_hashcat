@@ -1,5 +1,11 @@
 # shooter_hashcat release notes
 
+## v7.1.2-shooter.20260928.62
+
+### Fixed
+
+- Invalidate resident CUDA module and function handles after context replacement, preventing optimized-to-pure fallback failures such as `named symbol not found` and `context is destroyed`.
+
 ## v7.1.2-shooter.20260906.61
 
 Mixed-mode cracking and candidate-rule correctness.
