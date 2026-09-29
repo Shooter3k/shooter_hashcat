@@ -1,5 +1,11 @@
 # shooter_hashcat release notes
 
+## v7.1.2-shooter.20260929.63
+
+### Fixed
+
+- Invalidate resident CUDA streams, events, shared modules, and function handles when a CUDA context is replaced, preventing stale-resource failures during worker recovery and optimized-to-pure fallback.
+
 ## v7.1.2-shooter.20260928.62
 
 ### Fixed

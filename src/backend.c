@@ -14952,6 +14952,12 @@ void backend_session_context_reset (hashcat_ctx_t *hashcat_ctx)
       device_param->cuda_function_atinit        = NULL;
       device_param->cuda_function_decompress    = NULL;
       device_param->cuda_function_utf8toutf16le = NULL;
+      // Streams and events are context-owned too.  They must be recreated by
+      // backend_session_begin() before the next session.
+      device_param->cuda_stream = NULL;
+      device_param->cuda_event1 = NULL;
+      device_param->cuda_event2 = NULL;
+      device_param->cuda_event3 = NULL;
 
       if (hc_cuCtxCreate (hashcat_ctx, &device_param->cuda_context, CU_CTX_SCHED_BLOCKING_SYNC, device_param->cuda_device) == -1)
       {
