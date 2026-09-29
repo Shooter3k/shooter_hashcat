@@ -75,16 +75,22 @@ if ($Changelog -notmatch ('(?m)^##\s+' + [regex]::Escape($Tag) + '\s*$')) {
   throw "CHANGELOG.md does not contain a release section for $Tag."
 }
 
+if ($Tag -notmatch '^v7\.1\.2-shooter\.(\d{8})\.(\d+)$') {
+  throw "Tag must match v7.1.2-shooter.YYYYMMDD.REVISION: $Tag"
+}
+$env:SHOOTER_BUILD_DATE = $Matches[1]
+$env:SHOOTER_BUILD_REVISION = $Matches[2]
+
 Invoke-Git @('add', '--', 'CHANGELOG.md', 'release-windows.ps1', 'src/backend.c', 'include/backend.h', 'src/hashcat.c')
 & git diff --cached --quiet
 if ($LASTEXITCODE -ne 0) {
   Invoke-Git @('commit', '-m', "Release $Tag")
 }
 
-$ExistingTag = (& git tag --list $Tag).Trim()
+$ExistingTag = ([string]((& git tag --list $Tag) -join '')).Trim()
 if ($ExistingTag -ne '') {
-  $TagCommit = (& git rev-list -n 1 $Tag).Trim()
-  $HeadCommit = (& git rev-parse HEAD).Trim()
+  $TagCommit = ([string]((& git rev-list -n 1 $Tag) -join '')).Trim()
+  $HeadCommit = ([string]((& git rev-parse HEAD) -join '')).Trim()
   if ($TagCommit -ne $HeadCommit) { throw "Tag $Tag already exists on a different commit." }
 }
 else {
@@ -96,7 +102,7 @@ if ($LASTEXITCODE -ne 0) { throw "build-windows.ps1 failed with exit code $LASTE
 & (Join-Path $RepoRoot 'package-windows.ps1') -BuildAction Skip -OutputDirectory dist -ExpectedVersion $Tag -Force
 if ($LASTEXITCODE -ne 0) { throw "package-windows.ps1 failed with exit code $LASTEXITCODE." }
 
-$Branch = (& git branch --show-current).Trim()
+$Branch = ([string]((& git branch --show-current) -join '')).Trim()
 Invoke-Git @('push', 'origin', $Branch)
 Invoke-Git @('push', 'origin', $Tag)
 Write-Host "Release published: $Tag"

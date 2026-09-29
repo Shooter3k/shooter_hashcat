@@ -1,5 +1,11 @@
 # shooter_hashcat release notes
 
+## v7.1.2-shooter.20260929.64
+
+### Fixed
+
+- Pass the requested release date and revision into production builds so packaged binaries report the exact release tag.
+
 ## v7.1.2-shooter.20260929.63
 
 ### Fixed
